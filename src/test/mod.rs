@@ -1,9 +1,17 @@
 use handmade_cc::Compiler;
 use wasmi::{Engine, Linker, Module, Store};
 
+#[cfg(feature = "std")]
+static INIT: std::sync::Once = std::sync::Once::new();
+
 include!(concat!(env!("OUT_DIR"), "/generated_tests.rs"));
 
 fn build_and_run(source_code: &str) -> Result<i32, String> {
+    #[cfg(feature = "std")]
+    INIT.call_once(|| {
+        std_logger::Config::logfmt().init();
+    });
+
     let wat = Compiler
         .compile(source_code)
         .map_err(|error| error.to_string())?;

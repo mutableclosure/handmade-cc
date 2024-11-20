@@ -9,6 +9,9 @@ mod test;
 const WAT_ONLY_OPTION: &str = "--wat-only";
 
 fn main() {
+    #[cfg(feature = "std")]
+    std_logger::Config::logfmt().init();
+
     let mut args = env::args().collect();
     let wat_only = read_wat_only_option(&mut args);
     let source_path = Path::new(&args[1]);

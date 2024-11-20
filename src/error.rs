@@ -1,7 +1,17 @@
-use core::fmt::{Display, Formatter, Result};
+use core::fmt::{self, Display, Formatter, Result};
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub enum Kind {}
+use crate::token::Token;
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum Kind {
+    InvalidToken(char),
+    ConstantTooLarge,
+    UnknownType(Token),
+    ExpectedIdentifier(Option<Token>),
+    ExpectedToken(Token, Option<Token>),
+    ExpectedExpression(Option<Token>),
+    UndefinedMain,
+}
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum Severity {
@@ -9,7 +19,7 @@ pub enum Severity {
     Error,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Error {
     pub(crate) line_number: usize,
     pub(crate) kind: Kind,
@@ -21,8 +31,8 @@ impl Error {
         self.line_number
     }
 
-    pub fn kind(&self) -> Kind {
-        self.kind
+    pub fn kind(&self) -> &Kind {
+        &self.kind
     }
 
     pub fn severity(&self) -> Severity {
@@ -38,7 +48,24 @@ impl Display for Error {
 
 impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "")
+        match self {
+            Kind::InvalidToken(found) => write!(f, "Invalid token: '{found}'"),
+            Kind::ConstantTooLarge => write!(f, "Integer literal too large"),
+            Kind::UnknownType(found) => write!(f, "Unknown type: '{found}'"),
+            Kind::ExpectedIdentifier(found) => {
+                write!(f, "Expected identifier")?;
+                write_found(f, found)
+            }
+            Kind::ExpectedToken(token, found) => {
+                write!(f, "Expected '{token}'")?;
+                write_found(f, found)
+            }
+            Kind::ExpectedExpression(found) => {
+                write!(f, "Expected expression")?;
+                write_found(f, found)
+            }
+            Kind::UndefinedMain => write!(f, "Undefined reference to 'main'"),
+        }
     }
 }
 
@@ -49,4 +76,11 @@ impl Display for Severity {
             Severity::Error => write!(f, "error"),
         }
     }
+}
+
+fn write_found(f: &mut Formatter<'_>, found: &Option<Token>) -> fmt::Result {
+    found
+        .as_ref()
+        .map(|found| write!(f, ", found: '{found}'"))
+        .unwrap_or(Ok(()))
 }

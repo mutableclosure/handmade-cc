@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["binary-output"]
+default = ["std", "binary-output"]
+std = ["std-logger"]
 binary-output = ["wat"]
 
 [dependencies]
 wat = { version = "1.220.0", optional = true }
+std-logger = { version = "0.5.4", optional = true }
+log = "0.4.22"
 
 [build-dependencies]
 serde = "1.0.215"
