@@ -14,3 +14,6 @@ wat = { version = "1.220.0", optional = true }
 serde = "1.0.215"
 serde_json = "1.0.133"
 walkdir = "2.5.0"
+
+[dev-dependencies]
+wasmi = "0.39.1"

@@ -71,7 +71,7 @@ fn write_test_case(file: &mut File, name: &str, path: &str, expected_return_code
     writeln!(
         file,
         r##"#[test]
-fn test_{name}() -> Result<(), ()> {{
+fn test_{name}() -> Result<(), String> {{
     let source_code = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/{}/{}"));"##,
         TESTS_DIR,
         path.replace("\\", "/")
