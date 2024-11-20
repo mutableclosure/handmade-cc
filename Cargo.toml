@@ -3,4 +3,9 @@ name = "handmade-cc"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["binary-output"]
+binary-output = ["wat"]
+
 [dependencies]
+wat = { version = "1.220.0", optional = true }

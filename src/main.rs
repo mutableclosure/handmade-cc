@@ -18,6 +18,9 @@ fn main() {
 
     if wat_only {
         write_output(output_path, wat);
+    } else {
+        let binary = wat_to_binary(&wat);
+        write_output(output_path, binary);
     }
 }
 
@@ -26,6 +29,22 @@ fn compile(file_name: &str, source: &str) -> String {
         eprintln!("{file_name}:{error}");
         process::exit(1);
     })
+}
+
+fn wat_to_binary(wat: &str) -> Vec<u8> {
+    #[cfg(feature = "binary-output")]
+    {
+        wat::parse_str(wat).unwrap_or_else(|error| {
+            eprintln!("Error compiling wat to binary: {error}",);
+            process::exit(1);
+        })
+    }
+
+    #[cfg(not(feature = "binary-output"))]
+    {
+        eprintln!("Compiler compiled without wat to binary support!");
+        process::exit(1);
+    }
 }
 
 fn write_output(path: &Path, output: impl AsRef<[u8]>) {
