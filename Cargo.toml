@@ -9,3 +9,8 @@ binary-output = ["wat"]
 
 [dependencies]
 wat = { version = "1.220.0", optional = true }
+
+[build-dependencies]
+serde = "1.0.215"
+serde_json = "1.0.133"
+walkdir = "2.5.0"

@@ -3,6 +3,9 @@ use std::path::Path;
 use std::process;
 use std::{env, fs};
 
+#[cfg(test)]
+mod test;
+
 const WAT_ONLY_OPTION: &str = "--wat-only";
 
 fn main() {
