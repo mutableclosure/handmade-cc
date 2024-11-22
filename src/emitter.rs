@@ -39,7 +39,7 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
 
 fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) {
     match expression {
-        Expression::Constant(constant) => instructions.push(Instruction::PushConstant(constant)),
+        Expression::Constant(value) => instructions.push(Instruction::PushConstant(value)),
     }
 }
 
