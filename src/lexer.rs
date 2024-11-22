@@ -30,6 +30,7 @@ impl<'a> Lexer<'a> {
                 _ if c.is_whitespace() => {}
                 _ if c.is_ascii_alphabetic() || c == '_' => return Ok(Some(self.identifier(c))),
                 _ if c.is_ascii_digit() => return Ok(Some(self.constant(c)?)),
+                '/' if self.source.peek() == Some(&'/') => self.ignore_line(),
                 '(' => return Ok(Some(Token::OpenParenthesis)),
                 ')' => return Ok(Some(Token::CloseParenthesis)),
                 '{' => return Ok(Some(Token::OpenBrace)),
@@ -44,6 +45,14 @@ impl<'a> Lexer<'a> {
 }
 
 impl Lexer<'_> {
+    fn ignore_line(&mut self) {
+        for c in self.source.by_ref() {
+            if c == '\n' {
+                break;
+            }
+        }
+    }
+
     fn identifier(&mut self, first: char) -> Token {
         let mut identifier = vec![first];
 
