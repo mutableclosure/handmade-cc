@@ -14,6 +14,8 @@ mod ast;
 mod compiler;
 mod emitter;
 mod error;
+mod ir;
 mod lexer;
 mod parser;
 mod token;
+mod wat;
