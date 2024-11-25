@@ -19,6 +19,9 @@ fn build_and_run(source_code: &str) -> Result<i32, String> {
     let wat = Compiler
         .compile(source_code)
         .map_err(|error| error.to_string())?;
+
+    println!("{wat}");
+
     let binary = wat::parse_str(wat).map_err(|error| error.to_string())?;
     let engine = Engine::default();
     let module = Module::new(&engine, &binary).map_err(|error| error.to_string())?;

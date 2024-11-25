@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::{boxed::Box, string::String};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Program {
@@ -12,14 +12,16 @@ pub struct FunctionDefinition {
     pub body: Statement,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Statement {
     Return(Expression),
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Expression {
     Constant(i32),
+    BitwiseComplement(Box<Expression>),
+    Negation(Box<Expression>),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]

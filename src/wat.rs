@@ -65,12 +65,13 @@ fn generate_function(function: Function, wat: &mut String) {
 fn generate_instruction(instruction: Instruction, wat: &mut String) {
     match instruction {
         Instruction::PushConstant(value) => {
-            wat.push_str("    i32.const ");
+            wat.push_str("    (i32.const ");
             wat.push_str(&value.to_string());
+            wat.push(')');
         }
-        Instruction::Return => {
-            wat.push_str("    return");
-        }
+        Instruction::Xor => wat.push_str("    (i32.xor)"),
+        Instruction::Sub => wat.push_str("    (i32.sub)"),
+        Instruction::Return => wat.push_str("    (return)"),
     }
 }
 

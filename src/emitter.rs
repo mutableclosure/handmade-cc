@@ -40,6 +40,16 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
 fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) {
     match expression {
         Expression::Constant(value) => instructions.push(Instruction::PushConstant(value)),
+        Expression::BitwiseComplement(expression) => {
+            emit_expression(*expression, instructions);
+            instructions.push(Instruction::PushConstant(-1));
+            instructions.push(Instruction::Xor);
+        }
+        Expression::Negation(expression) => {
+            instructions.push(Instruction::PushConstant(0));
+            emit_expression(*expression, instructions);
+            instructions.push(Instruction::Sub);
+        }
     }
 }
 

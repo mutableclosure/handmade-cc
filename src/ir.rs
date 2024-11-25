@@ -15,6 +15,8 @@ pub struct Function {
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Instruction {
     PushConstant(i32),
+    Xor,
+    Sub,
     Return,
 }
 

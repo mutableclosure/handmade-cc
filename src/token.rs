@@ -11,6 +11,8 @@ pub enum Token {
     OpenBrace,
     CloseBrace,
     Semicolon,
+    Tilde,
+    Hyphen,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -31,6 +33,8 @@ impl Display for Token {
             Token::OpenBrace => write!(f, "{{"),
             Token::CloseBrace => write!(f, "}}"),
             Token::Semicolon => write!(f, ";"),
+            Token::Tilde => write!(f, "~"),
+            Token::Hyphen => write!(f, "-"),
         }
     }
 }

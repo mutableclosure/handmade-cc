@@ -36,6 +36,8 @@ impl<'a> Lexer<'a> {
                 '{' => return Ok(Some(Token::OpenBrace)),
                 '}' => return Ok(Some(Token::CloseBrace)),
                 ';' => return Ok(Some(Token::Semicolon)),
+                '~' => return Ok(Some(Token::Tilde)),
+                '-' => return Ok(Some(Token::Hyphen)),
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }

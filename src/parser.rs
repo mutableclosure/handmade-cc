@@ -4,7 +4,7 @@ use crate::{
     token::{Keyword, Token},
     Error, ErrorKind, Severity,
 };
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 const MAIN: &str = "main";
 
@@ -67,6 +67,16 @@ impl Parser<'_> {
     fn expression(&mut self) -> Result<Expression, Error> {
         match self.lexer.next()? {
             Some(Token::Constant(value)) => Ok(Expression::Constant(value)),
+            Some(Token::Tilde) => self
+                .expression()
+                .map(Box::new)
+                .map(Expression::BitwiseComplement),
+            Some(Token::Hyphen) => self.expression().map(Box::new).map(Expression::Negation),
+            Some(Token::OpenParenthesis) => {
+                let expression = self.expression()?;
+                self.expect_token(Token::CloseParenthesis)
+                    .map(|()| expression)
+            }
             token => Err(self.err(ErrorKind::ExpectedExpression(token))),
         }
     }

@@ -82,7 +82,7 @@ fn test_{name}() -> Result<(), String> {{
         writeln!(
             file,
             r##"    let return_code = build_and_run(source_code)?;
-    assert_eq!(return_code, {expected_return_code}, "Unexpected return code");"##
+    assert_eq!(return_code as u8, {expected_return_code}, "Unexpected return code");"##
         )
         .unwrap();
     } else {
