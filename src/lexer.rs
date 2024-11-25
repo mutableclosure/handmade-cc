@@ -8,6 +8,7 @@ use core::{iter::Peekable, str::Chars};
 #[derive(Clone, Debug)]
 pub struct Lexer<'a> {
     source: Peekable<Chars<'a>>,
+    next: Option<Token>,
     line_number: usize,
 }
 
@@ -15,6 +16,7 @@ impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Self {
         Lexer {
             source: source.chars().peekable(),
+            next: None,
             line_number: 1,
         }
     }
@@ -23,7 +25,24 @@ impl<'a> Lexer<'a> {
         self.line_number
     }
 
+    pub fn peek(&mut self) -> Result<Option<&Token>, Error> {
+        if self.next.is_none() {
+            self.next = self.advance()?;
+        }
+        Ok(self.next.as_ref())
+    }
+
     pub fn next(&mut self) -> Result<Option<Token>, Error> {
+        if let Some(token) = self.next.take() {
+            Ok(Some(token))
+        } else {
+            self.advance()
+        }
+    }
+}
+
+impl Lexer<'_> {
+    fn advance(&mut self) -> Result<Option<Token>, Error> {
         while let Some(c) = self.source.next() {
             match c {
                 '\n' => self.line_number += 1,
@@ -38,15 +57,17 @@ impl<'a> Lexer<'a> {
                 ';' => return Ok(Some(Token::Semicolon)),
                 '~' => return Ok(Some(Token::Tilde)),
                 '-' => return Ok(Some(Token::Hyphen)),
+                '+' => return Ok(Some(Token::Plus)),
+                '*' => return Ok(Some(Token::Asterisk)),
+                '/' => return Ok(Some(Token::Slash)),
+                '%' => return Ok(Some(Token::Percent)),
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }
 
         Ok(None)
     }
-}
 
-impl Lexer<'_> {
     fn ignore_line(&mut self) {
         for c in self.source.by_ref() {
             if c == '\n' {

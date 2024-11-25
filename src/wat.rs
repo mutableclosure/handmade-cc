@@ -70,7 +70,11 @@ fn generate_instruction(instruction: Instruction, wat: &mut String) {
             wat.push(')');
         }
         Instruction::Xor => wat.push_str("    (i32.xor)"),
+        Instruction::Add => wat.push_str("    (i32.add)"),
         Instruction::Sub => wat.push_str("    (i32.sub)"),
+        Instruction::Mul => wat.push_str("    (i32.mul)"),
+        Instruction::Div => wat.push_str("    (i32.div_s)"),
+        Instruction::Rem => wat.push_str("    (i32.rem_s)"),
         Instruction::Return => wat.push_str("    (return)"),
     }
 }

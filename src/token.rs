@@ -13,6 +13,10 @@ pub enum Token {
     Semicolon,
     Tilde,
     Hyphen,
+    Plus,
+    Asterisk,
+    Slash,
+    Percent,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -35,6 +39,10 @@ impl Display for Token {
             Token::Semicolon => write!(f, ";"),
             Token::Tilde => write!(f, "~"),
             Token::Hyphen => write!(f, "-"),
+            Token::Plus => write!(f, "+"),
+            Token::Asterisk => write!(f, "*"),
+            Token::Slash => write!(f, "/"),
+            Token::Percent => write!(f, "%"),
         }
     }
 }

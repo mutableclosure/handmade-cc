@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expression, FunctionDefinition, Program, Statement, Type},
+    ast::{BinaryOp, Expression, FunctionDefinition, Program, Statement, Type},
     lexer::Lexer,
     token::{Keyword, Token},
     Error, ErrorKind, Severity,
@@ -59,21 +59,42 @@ impl Parser<'_> {
 
     fn statement(&mut self) -> Result<Statement, Error> {
         self.expect_token(Token::Keyword(Keyword::Return))?;
-        let expression = self.expression()?;
+        let expression = self.expression(0)?;
         self.expect_token(Token::Semicolon)?;
         Ok(Statement::Return(expression))
     }
 
-    fn expression(&mut self) -> Result<Expression, Error> {
+    fn expression(&mut self, min_precedence: u32) -> Result<Expression, Error> {
+        let mut left = self.factor()?;
+        let mut token = self.lexer.peek()?;
+
+        while let Some(op) = token.and_then(binary_op) {
+            let precedence = precedence(op);
+
+            if precedence < min_precedence {
+                break;
+            }
+
+            self.lexer.next()?;
+
+            let right = self.expression(precedence.saturating_add(1))?;
+            left = Expression::BinaryOp(op, left.into(), right.into());
+            token = self.lexer.peek()?;
+        }
+
+        Ok(left)
+    }
+
+    fn factor(&mut self) -> Result<Expression, Error> {
         match self.lexer.next()? {
             Some(Token::Constant(value)) => Ok(Expression::Constant(value)),
             Some(Token::Tilde) => self
-                .expression()
+                .factor()
                 .map(Box::new)
                 .map(Expression::BitwiseComplement),
-            Some(Token::Hyphen) => self.expression().map(Box::new).map(Expression::Negation),
+            Some(Token::Hyphen) => self.factor().map(Box::new).map(Expression::Negation),
             Some(Token::OpenParenthesis) => {
-                let expression = self.expression()?;
+                let expression = self.expression(0)?;
                 self.expect_token(Token::CloseParenthesis)
                     .map(|()| expression)
             }
@@ -110,5 +131,23 @@ impl Parser<'_> {
             kind,
             severity: Severity::Error,
         }
+    }
+}
+
+fn binary_op(token: &Token) -> Option<BinaryOp> {
+    match token {
+        Token::Plus => Some(BinaryOp::Add),
+        Token::Hyphen => Some(BinaryOp::Subtract),
+        Token::Asterisk => Some(BinaryOp::Multiply),
+        Token::Slash => Some(BinaryOp::Divide),
+        Token::Percent => Some(BinaryOp::Remainder),
+        _ => None,
+    }
+}
+
+fn precedence(op: BinaryOp) -> u32 {
+    match op {
+        BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Remainder => 50,
+        BinaryOp::Add | BinaryOp::Subtract => 45,
     }
 }

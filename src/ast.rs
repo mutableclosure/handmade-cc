@@ -22,6 +22,16 @@ pub enum Expression {
     Constant(i32),
     BitwiseComplement(Box<Expression>),
     Negation(Box<Expression>),
+    BinaryOp(BinaryOp, Box<Expression>, Box<Expression>),
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub enum BinaryOp {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]

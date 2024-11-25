@@ -16,7 +16,11 @@ pub struct Function {
 pub enum Instruction {
     PushConstant(i32),
     Xor,
+    Add,
     Sub,
+    Mul,
+    Div,
+    Rem,
     Return,
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expression, FunctionDefinition, Program, Statement, Type as AstType},
+    ast::{BinaryOp, Expression, FunctionDefinition, Program, Statement, Type as AstType},
     ir::{Function, Instruction, Module, Type as IrType},
     Error,
 };
@@ -50,6 +50,11 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             emit_expression(*expression, instructions);
             instructions.push(Instruction::Sub);
         }
+        Expression::BinaryOp(op, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(op.into());
+        }
     }
 }
 
@@ -57,5 +62,17 @@ fn emit_type(r#type: AstType) -> IrType {
     match r#type {
         AstType::Int => IrType::Int32,
         AstType::Void => IrType::Void,
+    }
+}
+
+impl From<BinaryOp> for Instruction {
+    fn from(value: BinaryOp) -> Self {
+        match value {
+            BinaryOp::Add => Instruction::Add,
+            BinaryOp::Subtract => Instruction::Sub,
+            BinaryOp::Multiply => Instruction::Mul,
+            BinaryOp::Divide => Instruction::Div,
+            BinaryOp::Remainder => Instruction::Rem,
+        }
     }
 }
