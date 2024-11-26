@@ -49,7 +49,8 @@ impl Lexer<'_> {
                 _ if c.is_whitespace() => {}
                 _ if c.is_ascii_alphabetic() || c == '_' => return Ok(Some(self.identifier(c))),
                 _ if c.is_ascii_digit() => return Ok(Some(self.constant(c)?)),
-                '/' if self.source.peek() == Some(&'/') => self.ignore_line(),
+                '/' if self.source.next_if_eq(&'/').is_some() => self.ignore_line(),
+                '/' if self.source.next_if_eq(&'*').is_some() => self.ignore_multiline_comment(),
                 '(' => return Ok(Some(Token::OpenParenthesis)),
                 ')' => return Ok(Some(Token::CloseParenthesis)),
                 '{' => return Ok(Some(Token::OpenBrace)),
@@ -61,6 +62,13 @@ impl Lexer<'_> {
                 '*' => return Ok(Some(Token::Asterisk)),
                 '/' => return Ok(Some(Token::Slash)),
                 '%' => return Ok(Some(Token::Percent)),
+                '&' => return Ok(Some(Token::Ampersand)),
+                '|' => return Ok(Some(Token::Bar)),
+                '^' => return Ok(Some(Token::Circumflex)),
+                '<' if self.source.next_if_eq(&'<').is_some() => return Ok(Some(Token::LeftShift)),
+                '>' if self.source.next_if_eq(&'>').is_some() => {
+                    return Ok(Some(Token::RightShift))
+                }
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }
@@ -71,6 +79,14 @@ impl Lexer<'_> {
     fn ignore_line(&mut self) {
         for c in self.source.by_ref() {
             if c == '\n' {
+                break;
+            }
+        }
+    }
+
+    fn ignore_multiline_comment(&mut self) {
+        while let Some(c) = self.source.next() {
+            if c == '*' && self.source.next_if_eq(&'/').is_some() {
                 break;
             }
         }

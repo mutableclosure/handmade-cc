@@ -69,13 +69,17 @@ fn generate_instruction(instruction: Instruction, wat: &mut String) {
             wat.push_str(&value.to_string());
             wat.push(')');
         }
-        Instruction::Xor => wat.push_str("    (i32.xor)"),
-        Instruction::Add => wat.push_str("    (i32.add)"),
-        Instruction::Sub => wat.push_str("    (i32.sub)"),
-        Instruction::Mul => wat.push_str("    (i32.mul)"),
-        Instruction::Div => wat.push_str("    (i32.div_s)"),
-        Instruction::Rem => wat.push_str("    (i32.rem_s)"),
-        Instruction::Return => wat.push_str("    (return)"),
+        Instruction::Add => wat.push_str("    i32.add"),
+        Instruction::Sub => wat.push_str("    i32.sub"),
+        Instruction::Mul => wat.push_str("    i32.mul"),
+        Instruction::Div => wat.push_str("    i32.div_s"),
+        Instruction::Rem => wat.push_str("    i32.rem_s"),
+        Instruction::And => wat.push_str("    i32.and"),
+        Instruction::Or => wat.push_str("    i32.or"),
+        Instruction::Xor => wat.push_str("    i32.xor"),
+        Instruction::ShiftLeft => wat.push_str("    i32.shl"),
+        Instruction::ShiftRight => wat.push_str("    i32.shr_s"),
+        Instruction::Return => wat.push_str("    return"),
     }
 }
 

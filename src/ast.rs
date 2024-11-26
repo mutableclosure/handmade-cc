@@ -32,6 +32,11 @@ pub enum BinaryOp {
     Multiply,
     Divide,
     Remainder,
+    And,
+    Or,
+    Xor,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]

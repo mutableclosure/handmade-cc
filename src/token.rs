@@ -17,6 +17,11 @@ pub enum Token {
     Asterisk,
     Slash,
     Percent,
+    Ampersand,
+    Bar,
+    Circumflex,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -43,6 +48,11 @@ impl Display for Token {
             Token::Asterisk => write!(f, "*"),
             Token::Slash => write!(f, "/"),
             Token::Percent => write!(f, "%"),
+            Token::Ampersand => write!(f, "&"),
+            Token::Bar => write!(f, "|"),
+            Token::Circumflex => write!(f, "^"),
+            Token::LeftShift => write!(f, "<<"),
+            Token::RightShift => write!(f, ">>"),
         }
     }
 }

@@ -141,6 +141,11 @@ fn binary_op(token: &Token) -> Option<BinaryOp> {
         Token::Asterisk => Some(BinaryOp::Multiply),
         Token::Slash => Some(BinaryOp::Divide),
         Token::Percent => Some(BinaryOp::Remainder),
+        Token::Ampersand => Some(BinaryOp::And),
+        Token::Bar => Some(BinaryOp::Or),
+        Token::Circumflex => Some(BinaryOp::Xor),
+        Token::LeftShift => Some(BinaryOp::LeftShift),
+        Token::RightShift => Some(BinaryOp::RightShift),
         _ => None,
     }
 }
@@ -149,5 +154,9 @@ fn precedence(op: BinaryOp) -> u32 {
     match op {
         BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Remainder => 50,
         BinaryOp::Add | BinaryOp::Subtract => 45,
+        BinaryOp::LeftShift | BinaryOp::RightShift => 40,
+        BinaryOp::And => 35,
+        BinaryOp::Xor => 30,
+        BinaryOp::Or => 25,
     }
 }

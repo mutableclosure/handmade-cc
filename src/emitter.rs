@@ -73,6 +73,11 @@ impl From<BinaryOp> for Instruction {
             BinaryOp::Multiply => Instruction::Mul,
             BinaryOp::Divide => Instruction::Div,
             BinaryOp::Remainder => Instruction::Rem,
+            BinaryOp::And => Instruction::And,
+            BinaryOp::Or => Instruction::Or,
+            BinaryOp::Xor => Instruction::Xor,
+            BinaryOp::LeftShift => Instruction::ShiftLeft,
+            BinaryOp::RightShift => Instruction::ShiftRight,
         }
     }
 }
