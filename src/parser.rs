@@ -128,9 +128,7 @@ impl Parser<'_> {
             self.lexer.next()?;
 
             let precedence = if is_assignment(op) {
-                if !matches!(left, Expression::Variable(_)) {
-                    return Err(self.err(ErrorKind::InvalidLvalue));
-                }
+                self.expect_lvalue(&left)?;
                 precedence
             } else {
                 precedence.saturating_add(1)
@@ -147,11 +145,39 @@ impl Parser<'_> {
     fn factor(&mut self) -> Result<Expression, Error> {
         match self.lexer.next()? {
             Some(Token::Constant(value)) => Ok(Expression::Constant(value)),
+            Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoPlusSigns)? => {
+                self.lexer.next()?;
+                self.environment
+                    .resolve_variable(&identifier)
+                    .map(Expression::Variable)
+                    .map_err(|kind| self.err(kind))
+                    .map(Box::new)
+                    .map(Expression::PostfixIncrement)
+            }
+            Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoHyphens)? => {
+                self.lexer.next()?;
+                self.environment
+                    .resolve_variable(&identifier)
+                    .map(Expression::Variable)
+                    .map_err(|kind| self.err(kind))
+                    .map(Box::new)
+                    .map(Expression::PostfixDecrement)
+            }
             Some(Token::Identifier(identifier)) => self
                 .environment
                 .resolve_variable(&identifier)
                 .map(Expression::Variable)
                 .map_err(|kind| self.err(kind)),
+            Some(Token::TwoPlusSigns) => {
+                let variable = self.factor()?;
+                self.expect_lvalue(&variable)?;
+                Ok(Expression::PrefixIncrement(variable.into()))
+            }
+            Some(Token::TwoHyphens) => {
+                let variable = self.factor()?;
+                self.expect_lvalue(&variable)?;
+                Ok(Expression::PrefixDecrement(variable.into()))
+            }
             Some(Token::Tilde) => self
                 .factor()
                 .map(Box::new)
@@ -160,8 +186,19 @@ impl Parser<'_> {
             Some(Token::ExclamationPoint) => self.factor().map(Box::new).map(Expression::Not),
             Some(Token::OpenParenthesis) => {
                 let expression = self.expression(0)?;
-                self.expect_token(Token::CloseParenthesis)
-                    .map(|()| expression)
+                let expression = self
+                    .expect_token(Token::CloseParenthesis)
+                    .map(|()| expression)?;
+                if matches!(expression, Expression::Variable(_)) {
+                    if self.peek_token(Token::TwoPlusSigns)? {
+                        self.lexer.next()?;
+                        return Ok(Expression::PostfixIncrement(expression.into()));
+                    } else if self.peek_token(Token::TwoHyphens)? {
+                        self.lexer.next()?;
+                        return Ok(Expression::PostfixDecrement(expression.into()));
+                    }
+                }
+                Ok(expression)
             }
             token => Err(self.err(ErrorKind::ExpectedExpression(token))),
         }
@@ -196,6 +233,14 @@ impl Parser<'_> {
 
     fn peek_any_token_but(&mut self, unexpected_token: Token) -> Result<bool, Error> {
         Ok(self.lexer.peek()?.is_some_and(|t| *t != unexpected_token))
+    }
+
+    fn expect_lvalue(&self, expression: &Expression) -> Result<(), Error> {
+        if !matches!(expression, Expression::Variable(_)) {
+            Err(self.err(ErrorKind::InvalidLvalue))
+        } else {
+            Ok(())
+        }
     }
 
     fn err(&self, kind: ErrorKind) -> Error {

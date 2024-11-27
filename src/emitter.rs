@@ -102,6 +102,18 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             emit_expression(*expression, instructions);
             instructions.push(Instruction::Eqz);
         }
+        Expression::PrefixIncrement(expression) => {
+            emit_prefix_op(*expression, Instruction::Add, instructions);
+        }
+        Expression::PrefixDecrement(expression) => {
+            emit_prefix_op(*expression, Instruction::Sub, instructions);
+        }
+        Expression::PostfixIncrement(expression) => {
+            emit_postfix_op(*expression, Instruction::Add, instructions);
+        }
+        Expression::PostfixDecrement(expression) => {
+            emit_postfix_op(*expression, Instruction::Sub, instructions);
+        }
         Expression::BinaryOp(BinaryOp::Add, left, right) => {
             emit_op(*left, *right, Instruction::Add, instructions);
         }
@@ -213,6 +225,23 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
         }
         Expression::Variable(name) => instructions.push(Instruction::LocalGet(name)),
     }
+}
+
+fn emit_prefix_op(expression: Expression, op: Instruction, instructions: &mut Vec<Instruction>) {
+    let name = emit_variable_name(expression);
+    instructions.push(Instruction::LocalGet(name.clone()));
+    instructions.push(Instruction::PushConstant(1));
+    instructions.push(op);
+    instructions.push(Instruction::LocalTee(name));
+}
+
+fn emit_postfix_op(expression: Expression, op: Instruction, instructions: &mut Vec<Instruction>) {
+    let name = emit_variable_name(expression);
+    instructions.push(Instruction::LocalGet(name.clone()));
+    instructions.push(Instruction::LocalGet(name.clone()));
+    instructions.push(Instruction::PushConstant(1));
+    instructions.push(op);
+    instructions.push(Instruction::LocalSet(name));
 }
 
 fn emit_op(

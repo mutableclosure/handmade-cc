@@ -69,7 +69,7 @@ impl Display for Kind {
             }
             Kind::Redefined(identifier) => write!(f, "Redefinition of '{identifier}'"),
             Kind::Undeclared(identifier) => write!(f, "'{identifier}' undeclared"),
-            Kind::InvalidLvalue => write!(f, "'Invalid lvalue as left operand of assignment"),
+            Kind::InvalidLvalue => write!(f, "'Invalid lvalue"),
             Kind::UndefinedMain => write!(f, "Undefined reference to 'main'"),
         }
     }

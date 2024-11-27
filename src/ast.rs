@@ -39,6 +39,10 @@ pub enum Expression {
     BitwiseComplement(Box<Expression>),
     Negation(Box<Expression>),
     Not(Box<Expression>),
+    PrefixIncrement(Box<Expression>),
+    PrefixDecrement(Box<Expression>),
+    PostfixIncrement(Box<Expression>),
+    PostfixDecrement(Box<Expression>),
     BinaryOp(BinaryOp, Box<Expression>, Box<Expression>),
 }
 
