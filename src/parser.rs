@@ -93,6 +93,7 @@ impl Parser<'_> {
                 .map(Box::new)
                 .map(Expression::BitwiseComplement),
             Some(Token::Hyphen) => self.factor().map(Box::new).map(Expression::Negation),
+            Some(Token::ExclamationPoint) => self.factor().map(Box::new).map(Expression::Not),
             Some(Token::OpenParenthesis) => {
                 let expression = self.expression(0)?;
                 self.expect_token(Token::CloseParenthesis)
@@ -141,11 +142,19 @@ fn binary_op(token: &Token) -> Option<BinaryOp> {
         Token::Asterisk => Some(BinaryOp::Multiply),
         Token::Slash => Some(BinaryOp::Divide),
         Token::Percent => Some(BinaryOp::Remainder),
-        Token::Ampersand => Some(BinaryOp::And),
-        Token::Bar => Some(BinaryOp::Or),
+        Token::Ampersand => Some(BinaryOp::BitwiseAnd),
+        Token::Bar => Some(BinaryOp::BitwiseOr),
         Token::Circumflex => Some(BinaryOp::Xor),
-        Token::LeftShift => Some(BinaryOp::LeftShift),
-        Token::RightShift => Some(BinaryOp::RightShift),
+        Token::TwoLessThanOps => Some(BinaryOp::LeftShift),
+        Token::TwoGreaterThanOps => Some(BinaryOp::RightShift),
+        Token::TwoAmpersands => Some(BinaryOp::And),
+        Token::TwoBars => Some(BinaryOp::Or),
+        Token::TwoEqualSigns => Some(BinaryOp::EqualTo),
+        Token::NotEqualSign => Some(BinaryOp::NotEqualTo),
+        Token::LessThanOp => Some(BinaryOp::LessThan),
+        Token::LessThanOrEqualToOp => Some(BinaryOp::LessThanOrEqualTo),
+        Token::GreaterThanOp => Some(BinaryOp::GreaterThan),
+        Token::GreaterThanOrEqualToOp => Some(BinaryOp::GreaterThanOrEqualTo),
         _ => None,
     }
 }
@@ -155,8 +164,15 @@ fn precedence(op: BinaryOp) -> u32 {
         BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Remainder => 50,
         BinaryOp::Add | BinaryOp::Subtract => 45,
         BinaryOp::LeftShift | BinaryOp::RightShift => 40,
-        BinaryOp::And => 35,
-        BinaryOp::Xor => 30,
-        BinaryOp::Or => 25,
+        BinaryOp::LessThan
+        | BinaryOp::LessThanOrEqualTo
+        | BinaryOp::GreaterThan
+        | BinaryOp::GreaterThanOrEqualTo => 35,
+        BinaryOp::EqualTo | BinaryOp::NotEqualTo => 30,
+        BinaryOp::BitwiseAnd => 25,
+        BinaryOp::Xor => 20,
+        BinaryOp::BitwiseOr => 15,
+        BinaryOp::And => 10,
+        BinaryOp::Or => 5,
     }
 }

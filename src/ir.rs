@@ -25,6 +25,17 @@ pub enum Instruction {
     Xor,
     ShiftLeft,
     ShiftRight,
+    Eq,
+    Eqz,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    IfWithResult,
+    Else,
+    End,
+    Select,
     Return,
 }
 

@@ -62,13 +62,34 @@ impl Lexer<'_> {
                 '*' => return Ok(Some(Token::Asterisk)),
                 '/' => return Ok(Some(Token::Slash)),
                 '%' => return Ok(Some(Token::Percent)),
-                '&' => return Ok(Some(Token::Ampersand)),
-                '|' => return Ok(Some(Token::Bar)),
                 '^' => return Ok(Some(Token::Circumflex)),
-                '<' if self.source.next_if_eq(&'<').is_some() => return Ok(Some(Token::LeftShift)),
-                '>' if self.source.next_if_eq(&'>').is_some() => {
-                    return Ok(Some(Token::RightShift))
+                '<' if self.source.next_if_eq(&'<').is_some() => {
+                    return Ok(Some(Token::TwoLessThanOps))
                 }
+                '>' if self.source.next_if_eq(&'>').is_some() => {
+                    return Ok(Some(Token::TwoGreaterThanOps))
+                }
+                '&' if self.source.next_if_eq(&'&').is_some() => {
+                    return Ok(Some(Token::TwoAmpersands))
+                }
+                '&' => return Ok(Some(Token::Ampersand)),
+                '|' if self.source.next_if_eq(&'|').is_some() => return Ok(Some(Token::TwoBars)),
+                '|' => return Ok(Some(Token::Bar)),
+                '=' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::TwoEqualSigns))
+                }
+                '!' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::NotEqualSign))
+                }
+                '!' => return Ok(Some(Token::ExclamationPoint)),
+                '<' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::LessThanOrEqualToOp))
+                }
+                '<' => return Ok(Some(Token::LessThanOp)),
+                '>' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::GreaterThanOrEqualToOp))
+                }
+                '>' => return Ok(Some(Token::GreaterThanOp)),
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }

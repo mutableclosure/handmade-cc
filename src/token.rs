@@ -20,8 +20,17 @@ pub enum Token {
     Ampersand,
     Bar,
     Circumflex,
-    LeftShift,
-    RightShift,
+    TwoLessThanOps,
+    TwoGreaterThanOps,
+    ExclamationPoint,
+    TwoAmpersands,
+    TwoBars,
+    TwoEqualSigns,
+    NotEqualSign,
+    LessThanOp,
+    GreaterThanOp,
+    LessThanOrEqualToOp,
+    GreaterThanOrEqualToOp,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -51,8 +60,17 @@ impl Display for Token {
             Token::Ampersand => write!(f, "&"),
             Token::Bar => write!(f, "|"),
             Token::Circumflex => write!(f, "^"),
-            Token::LeftShift => write!(f, "<<"),
-            Token::RightShift => write!(f, ">>"),
+            Token::TwoLessThanOps => write!(f, "<<"),
+            Token::TwoGreaterThanOps => write!(f, ">>"),
+            Token::ExclamationPoint => write!(f, ""),
+            Token::TwoAmpersands => write!(f, "&&"),
+            Token::TwoBars => write!(f, "||"),
+            Token::TwoEqualSigns => write!(f, "=="),
+            Token::NotEqualSign => write!(f, "!="),
+            Token::LessThanOp => write!(f, "<"),
+            Token::GreaterThanOp => write!(f, ">"),
+            Token::LessThanOrEqualToOp => write!(f, "<="),
+            Token::GreaterThanOrEqualToOp => write!(f, ">="),
         }
     }
 }

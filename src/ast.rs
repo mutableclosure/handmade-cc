@@ -22,6 +22,7 @@ pub enum Expression {
     Constant(i32),
     BitwiseComplement(Box<Expression>),
     Negation(Box<Expression>),
+    Not(Box<Expression>),
     BinaryOp(BinaryOp, Box<Expression>, Box<Expression>),
 }
 
@@ -32,11 +33,19 @@ pub enum BinaryOp {
     Multiply,
     Divide,
     Remainder,
-    And,
-    Or,
+    BitwiseAnd,
+    BitwiseOr,
     Xor,
     LeftShift,
     RightShift,
+    And,
+    Or,
+    EqualTo,
+    NotEqualTo,
+    LessThan,
+    LessThanOrEqualTo,
+    GreaterThan,
+    GreaterThanOrEqualTo,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]

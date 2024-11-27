@@ -50,10 +50,115 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             emit_expression(*expression, instructions);
             instructions.push(Instruction::Sub);
         }
-        Expression::BinaryOp(op, left, right) => {
+        Expression::Not(expression) => {
+            emit_expression(*expression, instructions);
+            instructions.push(Instruction::Eqz);
+        }
+        Expression::BinaryOp(BinaryOp::Add, left, right) => {
             emit_expression(*left, instructions);
             emit_expression(*right, instructions);
-            instructions.push(op.into());
+            instructions.push(Instruction::Add);
+        }
+        Expression::BinaryOp(BinaryOp::Subtract, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Sub);
+        }
+        Expression::BinaryOp(BinaryOp::Multiply, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Mul);
+        }
+        Expression::BinaryOp(BinaryOp::Divide, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Div);
+        }
+        Expression::BinaryOp(BinaryOp::Remainder, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Rem);
+        }
+        Expression::BinaryOp(BinaryOp::BitwiseAnd, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::And);
+        }
+        Expression::BinaryOp(BinaryOp::BitwiseOr, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Or);
+        }
+        Expression::BinaryOp(BinaryOp::Xor, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Xor);
+        }
+        Expression::BinaryOp(BinaryOp::LeftShift, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::ShiftLeft);
+        }
+        Expression::BinaryOp(BinaryOp::RightShift, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::ShiftRight);
+        }
+        Expression::BinaryOp(BinaryOp::And, left, right) => {
+            emit_expression(*left, instructions);
+            instructions.push(Instruction::Eqz);
+            instructions.push(Instruction::IfWithResult);
+            instructions.push(Instruction::PushConstant(0));
+            instructions.push(Instruction::Else);
+            instructions.push(Instruction::PushConstant(0));
+            instructions.push(Instruction::PushConstant(1));
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Eqz);
+            instructions.push(Instruction::Select);
+            instructions.push(Instruction::End);
+        }
+        Expression::BinaryOp(BinaryOp::Or, left, right) => {
+            emit_expression(*left, instructions);
+            instructions.push(Instruction::Eqz);
+            instructions.push(Instruction::IfWithResult);
+            instructions.push(Instruction::PushConstant(0));
+            instructions.push(Instruction::PushConstant(1));
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Eqz);
+            instructions.push(Instruction::Select);
+            instructions.push(Instruction::Else);
+            instructions.push(Instruction::PushConstant(1));
+            instructions.push(Instruction::End);
+        }
+        Expression::BinaryOp(BinaryOp::EqualTo, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Eq);
+        }
+        Expression::BinaryOp(BinaryOp::NotEqualTo, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Ne);
+        }
+        Expression::BinaryOp(BinaryOp::LessThan, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Lt);
+        }
+        Expression::BinaryOp(BinaryOp::LessThanOrEqualTo, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Le);
+        }
+        Expression::BinaryOp(BinaryOp::GreaterThan, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Gt);
+        }
+        Expression::BinaryOp(BinaryOp::GreaterThanOrEqualTo, left, right) => {
+            emit_expression(*left, instructions);
+            emit_expression(*right, instructions);
+            instructions.push(Instruction::Ge);
         }
     }
 }
@@ -62,22 +167,5 @@ fn emit_type(r#type: AstType) -> IrType {
     match r#type {
         AstType::Int => IrType::Int32,
         AstType::Void => IrType::Void,
-    }
-}
-
-impl From<BinaryOp> for Instruction {
-    fn from(value: BinaryOp) -> Self {
-        match value {
-            BinaryOp::Add => Instruction::Add,
-            BinaryOp::Subtract => Instruction::Sub,
-            BinaryOp::Multiply => Instruction::Mul,
-            BinaryOp::Divide => Instruction::Div,
-            BinaryOp::Remainder => Instruction::Rem,
-            BinaryOp::And => Instruction::And,
-            BinaryOp::Or => Instruction::Or,
-            BinaryOp::Xor => Instruction::Xor,
-            BinaryOp::LeftShift => Instruction::ShiftLeft,
-            BinaryOp::RightShift => Instruction::ShiftRight,
-        }
     }
 }
