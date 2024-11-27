@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::String};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Program {
@@ -9,17 +9,33 @@ pub struct Program {
 pub struct FunctionDefinition {
     pub name: String,
     pub return_type: Type,
-    pub body: Statement,
+    pub body: Vec<BlockItem>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum BlockItem {
+    Statement(Statement),
+    Declaration(Declaration),
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Statement {
     Return(Expression),
+    Expression(Expression),
+    Null,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Declaration {
+    pub name: String,
+    pub r#type: Type,
+    pub init: Option<Expression>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Expression {
     Constant(i32),
+    Variable(String),
     BitwiseComplement(Box<Expression>),
     Negation(Box<Expression>),
     Not(Box<Expression>),
@@ -46,6 +62,7 @@ pub enum BinaryOp {
     LessThanOrEqualTo,
     GreaterThan,
     GreaterThanOrEqualTo,
+    Assignment,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]

@@ -51,6 +51,16 @@ impl Wat {
             self.out.push_str(")\n");
         }
 
+        for variable in &function.local_variables {
+            self.out.push_str("    (local $");
+            self.out.push_str(&variable.name);
+
+            match variable.r#type {
+                Type::Int32 => self.out.push_str(" i32)\n"),
+                Type::Void => unreachable!(),
+            }
+        }
+
         let last = function.instructions.len().saturating_sub(1);
         self.level = 2;
 
@@ -109,6 +119,23 @@ impl Wat {
             Instruction::End => self.out.push_str("end"),
             Instruction::Select => self.out.push_str("select"),
             Instruction::Return => self.out.push_str("return"),
+            Instruction::LocalGet(name) => {
+                self.out.push_str("(local.get $");
+                self.out.push_str(&name);
+                self.out.push(')');
+            }
+            Instruction::LocalSet(name) => {
+                self.out.push_str("(local.set $");
+                self.out.push_str(&name);
+                self.out.push(')');
+            }
+            Instruction::LocalTee(name) => {
+                self.out.push_str("(local.tee $");
+                self.out.push_str(&name);
+                self.out.push(')');
+            }
+            Instruction::Drop => self.out.push_str("drop"),
+            Instruction::Nop => self.out.push_str("nop"),
         }
     }
 

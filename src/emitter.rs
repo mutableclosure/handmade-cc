@@ -1,6 +1,8 @@
 use crate::{
-    ast::{BinaryOp, Expression, FunctionDefinition, Program, Statement, Type as AstType},
-    ir::{Function, Instruction, Module, Type as IrType},
+    ast::{
+        BinaryOp, BlockItem, Expression, FunctionDefinition, Program, Statement, Type as AstType,
+    },
+    ir::{Function, Instruction, Module, Type as IrType, Variable},
     Error,
 };
 use alloc::vec::Vec;
@@ -17,14 +19,55 @@ impl Emitter {
 }
 
 fn emit_func_def(func_def: FunctionDefinition) -> Function {
+    let return_type = emit_type(func_def.return_type);
+
     Function {
         name: func_def.name,
-        return_type: emit_type(func_def.return_type),
+        local_variables: emit_variables(&func_def.body),
         instructions: {
             let mut instructions = Vec::new();
-            emit_statement(func_def.body, &mut instructions);
+            emit_block(func_def.body, &mut instructions);
+            emit_return_if_needed(return_type, &mut instructions);
             instructions
         },
+        return_type,
+    }
+}
+
+fn emit_variables(block: &[BlockItem]) -> Vec<Variable> {
+    let mut variables = Vec::new();
+
+    for item in block {
+        match item {
+            BlockItem::Statement(_) => {}
+            BlockItem::Declaration(declaration) => {
+                let variable = Variable {
+                    name: declaration.name.clone(),
+                    r#type: emit_type(declaration.r#type),
+                };
+                variables.push(variable);
+            }
+        }
+    }
+
+    variables
+}
+
+fn emit_block(block: Vec<BlockItem>, instructions: &mut Vec<Instruction>) {
+    block
+        .into_iter()
+        .for_each(|item| emit_block_item(item, instructions));
+}
+
+fn emit_block_item(block_item: BlockItem, instructions: &mut Vec<Instruction>) {
+    match block_item {
+        BlockItem::Statement(statement) => emit_statement(statement, instructions),
+        BlockItem::Declaration(declaration) => {
+            if let Some(init) = declaration.init {
+                emit_expression(init, instructions);
+                instructions.push(Instruction::LocalSet(declaration.name));
+            }
+        }
     }
 }
 
@@ -34,6 +77,11 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
             emit_expression(expression, instructions);
             instructions.push(Instruction::Return);
         }
+        Statement::Expression(expression) => {
+            emit_expression(expression, instructions);
+            instructions.push(Instruction::Drop);
+        }
+        Statement::Null => instructions.push(Instruction::Nop),
     }
 }
 
@@ -159,6 +207,32 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             emit_expression(*left, instructions);
             emit_expression(*right, instructions);
             instructions.push(Instruction::Ge);
+        }
+        Expression::BinaryOp(BinaryOp::Assignment, left, right) => {
+            emit_expression(*right, instructions);
+
+            let name = match *left {
+                Expression::Variable(name) => name,
+                _ => unreachable!(),
+            };
+
+            instructions.push(Instruction::LocalTee(name));
+        }
+        Expression::Variable(name) => instructions.push(Instruction::LocalGet(name)),
+    }
+}
+
+fn emit_return_if_needed(return_type: IrType, instructions: &mut Vec<Instruction>) {
+    if !instructions
+        .last()
+        .is_some_and(|i| matches!(i, Instruction::Return))
+    {
+        match return_type {
+            IrType::Int32 => {
+                instructions.push(Instruction::PushConstant(0));
+                instructions.push(Instruction::Return);
+            }
+            IrType::Void => {}
         }
     }
 }

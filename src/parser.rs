@@ -1,5 +1,8 @@
 use crate::{
-    ast::{BinaryOp, Expression, FunctionDefinition, Program, Statement, Type},
+    ast::{
+        BinaryOp, BlockItem, Declaration, Expression, FunctionDefinition, Program, Statement, Type,
+    },
+    environment::Environment,
     lexer::Lexer,
     token::{Keyword, Token},
     Error, ErrorKind, Severity,
@@ -11,12 +14,14 @@ const MAIN: &str = "main";
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
+    environment: Environment,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
             lexer: Lexer::new(source),
+            environment: Environment::default(),
         }
     }
 
@@ -47,7 +52,13 @@ impl Parser<'_> {
         self.expect_token(Token::Keyword(Keyword::Void))?;
         self.expect_token(Token::CloseParenthesis)?;
         self.expect_token(Token::OpenBrace)?;
-        let body = self.statement()?;
+
+        let mut body = Vec::new();
+
+        while self.peek_any_token_but(Token::CloseBrace)? {
+            body.push(self.block_item()?);
+        }
+
         self.expect_token(Token::CloseBrace)?;
 
         Ok(FunctionDefinition {
@@ -57,11 +68,50 @@ impl Parser<'_> {
         })
     }
 
+    fn block_item(&mut self) -> Result<BlockItem, Error> {
+        if self.peek_token(Token::Keyword(Keyword::Int))? {
+            Ok(BlockItem::Declaration(self.declaration()?))
+        } else {
+            Ok(BlockItem::Statement(self.statement()?))
+        }
+    }
+
     fn statement(&mut self) -> Result<Statement, Error> {
-        self.expect_token(Token::Keyword(Keyword::Return))?;
-        let expression = self.expression(0)?;
+        match self.lexer.peek()? {
+            Some(Token::Keyword(Keyword::Return)) => {
+                self.expect_token(Token::Keyword(Keyword::Return))?;
+                let expression = self.expression(0)?;
+                self.expect_token(Token::Semicolon)?;
+                Ok(Statement::Return(expression))
+            }
+            Some(Token::Semicolon) => {
+                self.expect_token(Token::Semicolon)?;
+                Ok(Statement::Null)
+            }
+            _ => Ok(Statement::Expression(self.expression(0)?)),
+        }
+    }
+
+    fn declaration(&mut self) -> Result<Declaration, Error> {
+        self.expect_token(Token::Keyword(Keyword::Int))?;
+
+        let r#type = Type::Int;
+        let identifier = self.expect_identifier()?;
+        let name = self
+            .environment
+            .declare_variable(&identifier)
+            .map_err(|kind| self.err(kind))?;
+
+        let init = if self.peek_token(Token::EqualSign)? {
+            self.expect_token(Token::EqualSign)?;
+            Some(self.expression(0)?)
+        } else {
+            None
+        };
+
         self.expect_token(Token::Semicolon)?;
-        Ok(Statement::Return(expression))
+
+        Ok(Declaration { name, r#type, init })
     }
 
     fn expression(&mut self, min_precedence: u32) -> Result<Expression, Error> {
@@ -77,7 +127,16 @@ impl Parser<'_> {
 
             self.lexer.next()?;
 
-            let right = self.expression(precedence.saturating_add(1))?;
+            let precedence = if matches!(op, BinaryOp::Assignment) {
+                if !matches!(left, Expression::Variable(_)) {
+                    return Err(self.err(ErrorKind::InvalidLvalue));
+                }
+                precedence
+            } else {
+                precedence.saturating_add(1)
+            };
+
+            let right = self.expression(precedence)?;
             left = Expression::BinaryOp(op, left.into(), right.into());
             token = self.lexer.peek()?;
         }
@@ -88,6 +147,11 @@ impl Parser<'_> {
     fn factor(&mut self) -> Result<Expression, Error> {
         match self.lexer.next()? {
             Some(Token::Constant(value)) => Ok(Expression::Constant(value)),
+            Some(Token::Identifier(identifier)) => self
+                .environment
+                .resolve_variable(&identifier)
+                .map(Expression::Variable)
+                .map_err(|kind| self.err(kind)),
             Some(Token::Tilde) => self
                 .factor()
                 .map(Box::new)
@@ -126,6 +190,14 @@ impl Parser<'_> {
         )
     }
 
+    fn peek_token(&mut self, expected_token: Token) -> Result<bool, Error> {
+        Ok(self.lexer.peek()?.is_some_and(|t| *t == expected_token))
+    }
+
+    fn peek_any_token_but(&mut self, unexpected_token: Token) -> Result<bool, Error> {
+        Ok(self.lexer.peek()?.is_some_and(|t| *t != unexpected_token))
+    }
+
     fn err(&self, kind: ErrorKind) -> Error {
         Error {
             line_number: self.lexer.line_number(),
@@ -155,6 +227,7 @@ fn binary_op(token: &Token) -> Option<BinaryOp> {
         Token::LessThanOrEqualToOp => Some(BinaryOp::LessThanOrEqualTo),
         Token::GreaterThanOp => Some(BinaryOp::GreaterThan),
         Token::GreaterThanOrEqualToOp => Some(BinaryOp::GreaterThanOrEqualTo),
+        Token::EqualSign => Some(BinaryOp::Assignment),
         _ => None,
     }
 }
@@ -174,5 +247,6 @@ fn precedence(op: BinaryOp) -> u32 {
         BinaryOp::BitwiseOr => 15,
         BinaryOp::And => 10,
         BinaryOp::Or => 5,
+        BinaryOp::Assignment => 1,
     }
 }

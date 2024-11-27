@@ -9,10 +9,17 @@ pub struct Module {
 pub struct Function {
     pub name: String,
     pub return_type: Type,
+    pub local_variables: Vec<Variable>,
     pub instructions: Vec<Instruction>,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Variable {
+    pub name: String,
+    pub r#type: Type,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Instruction {
     PushConstant(i32),
     Add,
@@ -37,6 +44,11 @@ pub enum Instruction {
     End,
     Select,
     Return,
+    LocalGet(String),
+    LocalSet(String),
+    LocalTee(String),
+    Drop,
+    Nop,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]

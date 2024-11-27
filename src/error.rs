@@ -1,6 +1,6 @@
-use core::fmt::{self, Display, Formatter, Result};
-
 use crate::token::Token;
+use alloc::string::String;
+use core::fmt::{self, Display, Formatter, Result};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Kind {
@@ -10,6 +10,9 @@ pub enum Kind {
     ExpectedIdentifier(Option<Token>),
     ExpectedToken(Token, Option<Token>),
     ExpectedExpression(Option<Token>),
+    Redefined(String),
+    Undeclared(String),
+    InvalidLvalue,
     UndefinedMain,
 }
 
@@ -64,6 +67,9 @@ impl Display for Kind {
                 write!(f, "Expected expression")?;
                 write_found(f, found)
             }
+            Kind::Redefined(identifier) => write!(f, "Redefinition of '{identifier}'"),
+            Kind::Undeclared(identifier) => write!(f, "'{identifier}' undeclared"),
+            Kind::InvalidLvalue => write!(f, "'Invalid lvalue as left operand of assignment"),
             Kind::UndefinedMain => write!(f, "Undefined reference to 'main'"),
         }
     }

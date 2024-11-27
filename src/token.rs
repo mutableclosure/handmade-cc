@@ -31,6 +31,7 @@ pub enum Token {
     GreaterThanOp,
     LessThanOrEqualToOp,
     GreaterThanOrEqualToOp,
+    EqualSign,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -71,6 +72,7 @@ impl Display for Token {
             Token::GreaterThanOp => write!(f, ">"),
             Token::LessThanOrEqualToOp => write!(f, "<="),
             Token::GreaterThanOrEqualToOp => write!(f, ">="),
+            Token::EqualSign => write!(f, "="),
         }
     }
 }

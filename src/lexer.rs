@@ -78,6 +78,7 @@ impl Lexer<'_> {
                 '=' if self.source.next_if_eq(&'=').is_some() => {
                     return Ok(Some(Token::TwoEqualSigns))
                 }
+                '=' => return Ok(Some(Token::EqualSign)),
                 '!' if self.source.next_if_eq(&'=').is_some() => {
                     return Ok(Some(Token::NotEqualSign))
                 }
