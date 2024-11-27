@@ -127,7 +127,7 @@ impl Parser<'_> {
 
             self.lexer.next()?;
 
-            let precedence = if matches!(op, BinaryOp::Assignment) {
+            let precedence = if is_assignment(op) {
                 if !matches!(left, Expression::Variable(_)) {
                     return Err(self.err(ErrorKind::InvalidLvalue));
                 }
@@ -209,7 +209,7 @@ impl Parser<'_> {
 
 fn binary_op(token: &Token) -> Option<BinaryOp> {
     match token {
-        Token::Plus => Some(BinaryOp::Add),
+        Token::PlusSign => Some(BinaryOp::Add),
         Token::Hyphen => Some(BinaryOp::Subtract),
         Token::Asterisk => Some(BinaryOp::Multiply),
         Token::Slash => Some(BinaryOp::Divide),
@@ -228,6 +228,16 @@ fn binary_op(token: &Token) -> Option<BinaryOp> {
         Token::GreaterThanOp => Some(BinaryOp::GreaterThan),
         Token::GreaterThanOrEqualToOp => Some(BinaryOp::GreaterThanOrEqualTo),
         Token::EqualSign => Some(BinaryOp::Assignment),
+        Token::PlusEqualSign => Some(BinaryOp::AddAssignment),
+        Token::HyphenEqualSign => Some(BinaryOp::SubtractAssignment),
+        Token::AsteriskEqualSign => Some(BinaryOp::MultiplyAssignment),
+        Token::SlashEqualSign => Some(BinaryOp::DivideAssignment),
+        Token::PercentEqualSign => Some(BinaryOp::RemainderAssignment),
+        Token::AmpersandEqualSign => Some(BinaryOp::BitwiseAndAssignment),
+        Token::BarEqualSign => Some(BinaryOp::BitwiseOrAssignment),
+        Token::CircumflexEqualSign => Some(BinaryOp::XorAssignment),
+        Token::TwoLessThanOpsEqualSign => Some(BinaryOp::LeftShiftAssignment),
+        Token::TwoGreaterThanOpsEqualSign => Some(BinaryOp::RightShiftAssignment),
         _ => None,
     }
 }
@@ -247,6 +257,50 @@ fn precedence(op: BinaryOp) -> u32 {
         BinaryOp::BitwiseOr => 15,
         BinaryOp::And => 10,
         BinaryOp::Or => 5,
-        BinaryOp::Assignment => 1,
+        BinaryOp::Assignment
+        | BinaryOp::AddAssignment
+        | BinaryOp::SubtractAssignment
+        | BinaryOp::MultiplyAssignment
+        | BinaryOp::DivideAssignment
+        | BinaryOp::RemainderAssignment
+        | BinaryOp::LeftShiftAssignment
+        | BinaryOp::RightShiftAssignment
+        | BinaryOp::BitwiseAndAssignment
+        | BinaryOp::BitwiseOrAssignment
+        | BinaryOp::XorAssignment => 1,
+    }
+}
+
+fn is_assignment(op: BinaryOp) -> bool {
+    match op {
+        BinaryOp::Assignment
+        | BinaryOp::AddAssignment
+        | BinaryOp::SubtractAssignment
+        | BinaryOp::MultiplyAssignment
+        | BinaryOp::DivideAssignment
+        | BinaryOp::RemainderAssignment
+        | BinaryOp::BitwiseAndAssignment
+        | BinaryOp::BitwiseOrAssignment
+        | BinaryOp::XorAssignment
+        | BinaryOp::LeftShiftAssignment
+        | BinaryOp::RightShiftAssignment => true,
+        BinaryOp::Add
+        | BinaryOp::Subtract
+        | BinaryOp::Multiply
+        | BinaryOp::Divide
+        | BinaryOp::Remainder
+        | BinaryOp::BitwiseAnd
+        | BinaryOp::BitwiseOr
+        | BinaryOp::Xor
+        | BinaryOp::LeftShift
+        | BinaryOp::RightShift
+        | BinaryOp::And
+        | BinaryOp::Or
+        | BinaryOp::EqualTo
+        | BinaryOp::NotEqualTo
+        | BinaryOp::LessThan
+        | BinaryOp::LessThanOrEqualTo
+        | BinaryOp::GreaterThan
+        | BinaryOp::GreaterThanOrEqualTo => false,
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     ir::{Function, Instruction, Module, Type as IrType, Variable},
     Error,
 };
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 #[derive(Clone, Debug)]
 pub struct Emitter;
@@ -103,54 +103,34 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             instructions.push(Instruction::Eqz);
         }
         Expression::BinaryOp(BinaryOp::Add, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Add);
+            emit_op(*left, *right, Instruction::Add, instructions);
         }
         Expression::BinaryOp(BinaryOp::Subtract, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Sub);
+            emit_op(*left, *right, Instruction::Sub, instructions);
         }
         Expression::BinaryOp(BinaryOp::Multiply, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Mul);
+            emit_op(*left, *right, Instruction::Mul, instructions);
         }
         Expression::BinaryOp(BinaryOp::Divide, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Div);
+            emit_op(*left, *right, Instruction::Div, instructions);
         }
         Expression::BinaryOp(BinaryOp::Remainder, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Rem);
+            emit_op(*left, *right, Instruction::Rem, instructions);
         }
         Expression::BinaryOp(BinaryOp::BitwiseAnd, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::And);
+            emit_op(*left, *right, Instruction::And, instructions);
         }
         Expression::BinaryOp(BinaryOp::BitwiseOr, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Or);
+            emit_op(*left, *right, Instruction::Or, instructions);
         }
         Expression::BinaryOp(BinaryOp::Xor, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Xor);
+            emit_op(*left, *right, Instruction::Xor, instructions);
         }
         Expression::BinaryOp(BinaryOp::LeftShift, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::ShiftLeft);
+            emit_op(*left, *right, Instruction::ShiftLeft, instructions);
         }
         Expression::BinaryOp(BinaryOp::RightShift, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::ShiftRight);
+            emit_op(*left, *right, Instruction::ShiftRight, instructions);
         }
         Expression::BinaryOp(BinaryOp::And, left, right) => {
             emit_expression(*left, instructions);
@@ -179,47 +159,84 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             instructions.push(Instruction::End);
         }
         Expression::BinaryOp(BinaryOp::EqualTo, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Eq);
+            emit_op(*left, *right, Instruction::Eq, instructions);
         }
         Expression::BinaryOp(BinaryOp::NotEqualTo, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Ne);
+            emit_op(*left, *right, Instruction::Ne, instructions);
         }
         Expression::BinaryOp(BinaryOp::LessThan, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Lt);
+            emit_op(*left, *right, Instruction::Lt, instructions);
         }
         Expression::BinaryOp(BinaryOp::LessThanOrEqualTo, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Le);
+            emit_op(*left, *right, Instruction::Le, instructions);
         }
         Expression::BinaryOp(BinaryOp::GreaterThan, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Gt);
+            emit_op(*left, *right, Instruction::Gt, instructions);
         }
         Expression::BinaryOp(BinaryOp::GreaterThanOrEqualTo, left, right) => {
-            emit_expression(*left, instructions);
-            emit_expression(*right, instructions);
-            instructions.push(Instruction::Ge);
+            emit_op(*left, *right, Instruction::Ge, instructions);
         }
         Expression::BinaryOp(BinaryOp::Assignment, left, right) => {
+            let name = emit_variable_name(*left);
             emit_expression(*right, instructions);
-
-            let name = match *left {
-                Expression::Variable(name) => name,
-                _ => unreachable!(),
-            };
-
             instructions.push(Instruction::LocalTee(name));
+        }
+        Expression::BinaryOp(BinaryOp::AddAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::Add, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::SubtractAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::Sub, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::MultiplyAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::Mul, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::DivideAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::Div, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::RemainderAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::Rem, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::BitwiseAndAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::And, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::BitwiseOrAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::Or, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::XorAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::Xor, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::LeftShiftAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::ShiftLeft, instructions);
+        }
+        Expression::BinaryOp(BinaryOp::RightShiftAssignment, left, right) => {
+            emit_assignment_op(*left, *right, Instruction::ShiftRight, instructions);
         }
         Expression::Variable(name) => instructions.push(Instruction::LocalGet(name)),
     }
+}
+
+fn emit_op(
+    left: Expression,
+    right: Expression,
+    op: Instruction,
+    instructions: &mut Vec<Instruction>,
+) {
+    emit_expression(left, instructions);
+    emit_expression(right, instructions);
+    instructions.push(op);
+}
+
+fn emit_assignment_op(
+    left: Expression,
+    right: Expression,
+    op: Instruction,
+    instructions: &mut Vec<Instruction>,
+) {
+    let name = emit_variable_name(left);
+    instructions.push(Instruction::LocalGet(name.clone()));
+    emit_expression(right, instructions);
+    instructions.push(op);
+    instructions.push(Instruction::LocalTee(name));
 }
 
 fn emit_return_if_needed(return_type: IrType, instructions: &mut Vec<Instruction>) {
@@ -234,6 +251,13 @@ fn emit_return_if_needed(return_type: IrType, instructions: &mut Vec<Instruction
             }
             IrType::Void => {}
         }
+    }
+}
+
+fn emit_variable_name(expression: Expression) -> String {
+    match expression {
+        Expression::Variable(name) => name,
+        _ => unreachable!(),
     }
 }
 

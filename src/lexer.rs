@@ -57,23 +57,61 @@ impl Lexer<'_> {
                 '}' => return Ok(Some(Token::CloseBrace)),
                 ';' => return Ok(Some(Token::Semicolon)),
                 '~' => return Ok(Some(Token::Tilde)),
+                '-' if self.source.next_if_eq(&'-').is_some() => {
+                    return Ok(Some(Token::TwoHyphens))
+                }
+                '-' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::HyphenEqualSign))
+                }
                 '-' => return Ok(Some(Token::Hyphen)),
-                '+' => return Ok(Some(Token::Plus)),
+                '+' if self.source.next_if_eq(&'+').is_some() => {
+                    return Ok(Some(Token::TwoPlusSigns))
+                }
+                '+' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::PlusEqualSign))
+                }
+                '+' => return Ok(Some(Token::PlusSign)),
+                '*' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::AsteriskEqualSign))
+                }
                 '*' => return Ok(Some(Token::Asterisk)),
+                '/' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::SlashEqualSign))
+                }
                 '/' => return Ok(Some(Token::Slash)),
+                '%' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::PercentEqualSign))
+                }
                 '%' => return Ok(Some(Token::Percent)),
+                '^' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::CircumflexEqualSign))
+                }
                 '^' => return Ok(Some(Token::Circumflex)),
                 '<' if self.source.next_if_eq(&'<').is_some() => {
-                    return Ok(Some(Token::TwoLessThanOps))
+                    return Ok(Some(if self.source.next_if_eq(&'=').is_some() {
+                        Token::TwoLessThanOpsEqualSign
+                    } else {
+                        Token::TwoLessThanOps
+                    }));
                 }
                 '>' if self.source.next_if_eq(&'>').is_some() => {
-                    return Ok(Some(Token::TwoGreaterThanOps))
+                    return Ok(Some(if self.source.next_if_eq(&'=').is_some() {
+                        Token::TwoGreaterThanOpsEqualSign
+                    } else {
+                        Token::TwoGreaterThanOps
+                    }));
                 }
                 '&' if self.source.next_if_eq(&'&').is_some() => {
                     return Ok(Some(Token::TwoAmpersands))
                 }
+                '&' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::AmpersandEqualSign))
+                }
                 '&' => return Ok(Some(Token::Ampersand)),
                 '|' if self.source.next_if_eq(&'|').is_some() => return Ok(Some(Token::TwoBars)),
+                '|' if self.source.next_if_eq(&'=').is_some() => {
+                    return Ok(Some(Token::BarEqualSign))
+                }
                 '|' => return Ok(Some(Token::Bar)),
                 '=' if self.source.next_if_eq(&'=').is_some() => {
                     return Ok(Some(Token::TwoEqualSigns))

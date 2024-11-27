@@ -63,6 +63,16 @@ pub enum BinaryOp {
     GreaterThan,
     GreaterThanOrEqualTo,
     Assignment,
+    AddAssignment,
+    SubtractAssignment,
+    MultiplyAssignment,
+    DivideAssignment,
+    RemainderAssignment,
+    BitwiseAndAssignment,
+    BitwiseOrAssignment,
+    XorAssignment,
+    LeftShiftAssignment,
+    RightShiftAssignment,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
