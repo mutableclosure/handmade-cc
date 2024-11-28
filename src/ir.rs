@@ -42,13 +42,17 @@ pub enum Instruction {
     If,
     IfWithResult,
     Else,
-    End,
     Select,
     Return,
     LocalGet(String),
     LocalSet(String),
     LocalTee(String),
     Drop,
+    Loop(String),
+    Block(String),
+    Branch(String),
+    BranchIf(String),
+    End,
     Nop,
 }
 

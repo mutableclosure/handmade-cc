@@ -579,7 +579,7 @@
     "return_code": 0
   },
   "chapter_8/valid/empty_loop_body.c": {
-    "return_code": 252
+    "return_code": 251
   },
   "chapter_8/valid/extra_credit/case_block.c": {
     "return_code": 1

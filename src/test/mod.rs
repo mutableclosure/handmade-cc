@@ -22,6 +22,10 @@ fn build_and_run(source_code: &str) -> Result<i32, String> {
 
     println!("{wat}");
 
+    if source_code.lines().next() == Some("// DEBUG") {
+        panic!("Stopped for debugging");
+    }
+
     let binary = wat::parse_str(wat).map_err(|error| error.to_string())?;
     let engine = Engine::default();
     let module = Module::new(&engine, &binary).map_err(|error| error.to_string())?;

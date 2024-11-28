@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Declaration, Expression, FunctionDefinition, Program,
+        BinaryOp, Block, BlockItem, Declaration, Expression, ForInit, FunctionDefinition, Program,
         Statement, Type,
     },
     environment::Environment,
@@ -8,7 +8,11 @@ use crate::{
     token::{Keyword, Token},
     Error, ErrorKind, Severity,
 };
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 const MAIN: &str = "main";
 
@@ -81,9 +85,7 @@ impl Parser<'_> {
             }
             Some(Token::Keyword(Keyword::If)) => {
                 self.lexer.next()?;
-                self.expect_token(Token::OpenParenthesis)?;
-                let condition = self.expression(0)?;
-                self.expect_token(Token::CloseParenthesis)?;
+                let condition = self.condition()?;
                 let then = self.statement()?.into();
 
                 let r#else = if self.peek_token(Token::Keyword(Keyword::Else))? {
@@ -96,6 +98,51 @@ impl Parser<'_> {
 
                 Ok(Statement::If(condition, then, r#else))
             }
+            Some(Token::Keyword(Keyword::Break)) => {
+                self.lexer.next()?;
+                let label = self
+                    .environment
+                    .loop_label()
+                    .map(|l| l.to_string())
+                    .ok_or_else(|| self.err(ErrorKind::BreakOutsideLoopOrSwitch))?;
+                self.expect_token(Token::Semicolon)?;
+                Ok(Statement::Break(label))
+            }
+            Some(Token::Keyword(Keyword::Continue)) => {
+                self.lexer.next()?;
+                let label = self
+                    .environment
+                    .loop_label()
+                    .map(|l| l.to_string())
+                    .ok_or_else(|| self.err(ErrorKind::ContinueOutsideLoop))?;
+                self.expect_token(Token::Semicolon)?;
+                Ok(Statement::Continue(label))
+            }
+            Some(Token::Keyword(Keyword::While)) => {
+                self.lexer.next()?;
+                let condition = self.condition()?;
+                let (label, body) = self.loop_body()?;
+                Ok(Statement::While(label, condition, body))
+            }
+            Some(Token::Keyword(Keyword::Do)) => {
+                self.lexer.next()?;
+                let (label, body) = self.loop_body()?;
+                self.expect_token(Token::Keyword(Keyword::While))?;
+                let condition = self.condition()?;
+                self.expect_token(Token::Semicolon)?;
+                Ok(Statement::DoWhile(label, body, condition))
+            }
+            Some(Token::Keyword(Keyword::For)) => {
+                self.lexer.next()?;
+                self.environment.nest();
+                self.expect_token(Token::OpenParenthesis)?;
+                let init = self.for_init()?;
+                let condition = self.maybe_expression(Token::Semicolon)?;
+                let post = self.maybe_expression(Token::CloseParenthesis)?;
+                let (label, body) = self.loop_body()?;
+                self.environment.unnest();
+                Ok(Statement::For(label, init, condition, post, body))
+            }
             Some(Token::OpenBrace) => Ok(Statement::Compound(self.block()?)),
             _ => {
                 let expression = self.expression(0)?;
@@ -103,6 +150,44 @@ impl Parser<'_> {
                 Ok(Statement::Expression(expression))
             }
         }
+    }
+
+    fn condition(&mut self) -> Result<Expression, Error> {
+        self.expect_token(Token::OpenParenthesis)?;
+        let condition = self.expression(0)?;
+        self.expect_token(Token::CloseParenthesis)?;
+        Ok(condition)
+    }
+
+    fn for_init(&mut self) -> Result<Option<ForInit>, Error> {
+        if self.peek_token(Token::Keyword(Keyword::Int))? {
+            Ok(Some(ForInit::Declaration(self.declaration()?)))
+        } else if self.peek_token(Token::Semicolon)? {
+            self.lexer.next()?;
+            Ok(None)
+        } else {
+            let expression = self.expression(0)?;
+            self.expect_token(Token::Semicolon)?;
+            Ok(Some(ForInit::Expression(expression)))
+        }
+    }
+
+    fn maybe_expression(&mut self, terminator: Token) -> Result<Option<Expression>, Error> {
+        Ok(if self.peek_token(terminator.clone())? {
+            self.lexer.next()?;
+            None
+        } else {
+            let expression = self.expression(0)?;
+            self.expect_token(terminator)?;
+            Some(expression)
+        })
+    }
+
+    fn loop_body(&mut self) -> Result<(String, Box<Statement>), Error> {
+        let label = self.environment.enter_loop().to_string();
+        let body = self.statement()?.into();
+        self.environment.exit_loop();
+        Ok((label, body))
     }
 
     fn block(&mut self) -> Result<Block, Error> {

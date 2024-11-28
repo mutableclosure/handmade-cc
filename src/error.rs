@@ -13,6 +13,8 @@ pub enum Kind {
     Redefined(String),
     Undeclared(String),
     InvalidLvalue,
+    BreakOutsideLoopOrSwitch,
+    ContinueOutsideLoop,
     UndefinedMain,
 }
 
@@ -70,6 +72,10 @@ impl Display for Kind {
             Kind::Redefined(identifier) => write!(f, "Redefinition of '{identifier}'"),
             Kind::Undeclared(identifier) => write!(f, "'{identifier}' undeclared"),
             Kind::InvalidLvalue => write!(f, "'Invalid lvalue"),
+            Kind::BreakOutsideLoopOrSwitch => {
+                write!(f, "'break' statement not within a loop or switch")
+            }
+            Kind::ContinueOutsideLoop => write!(f, "'continue' statement not within a loop"),
             Kind::UndefinedMain => write!(f, "Undefined reference to 'main'"),
         }
     }

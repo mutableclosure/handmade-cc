@@ -55,6 +55,11 @@ pub enum Keyword {
     Return,
     If,
     Else,
+    Do,
+    While,
+    For,
+    Break,
+    Continue,
 }
 
 impl Display for Token {
@@ -115,6 +120,11 @@ impl Display for Keyword {
             Keyword::Return => write!(f, "return"),
             Keyword::If => write!(f, "if"),
             Keyword::Else => write!(f, "else"),
+            Keyword::Do => write!(f, "do"),
+            Keyword::While => write!(f, "while"),
+            Keyword::For => write!(f, "for"),
+            Keyword::Break => write!(f, "break"),
+            Keyword::Continue => write!(f, "continue"),
         }
     }
 }

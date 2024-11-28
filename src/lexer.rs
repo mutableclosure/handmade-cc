@@ -169,6 +169,11 @@ impl Lexer<'_> {
             "return" => Token::Keyword(Keyword::Return),
             "if" => Token::Keyword(Keyword::If),
             "else" => Token::Keyword(Keyword::Else),
+            "do" => Token::Keyword(Keyword::Do),
+            "while" => Token::Keyword(Keyword::While),
+            "for" => Token::Keyword(Keyword::For),
+            "break" => Token::Keyword(Keyword::Break),
+            "continue" => Token::Keyword(Keyword::Continue),
             _ => Token::Identifier(identifier),
         }
     }

@@ -1,12 +1,16 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Expression, FunctionDefinition, Program, Statement,
-        Type as AstType,
+        BinaryOp, Block, BlockItem, Declaration, Expression, ForInit, FunctionDefinition, Program,
+        Statement, Type as AstType,
     },
     ir::{Function, Instruction, Module, Type as IrType, Variable},
     Error,
 };
 use alloc::{collections::btree_set::BTreeSet, string::String, vec::Vec};
+
+const BREAK_LABEL: &str = "break";
+const CONTINUE_LABEL: &str = "continue";
+const POST_LABEL: &str = "post";
 
 #[derive(Clone, Debug)]
 pub struct Emitter;
@@ -49,29 +53,58 @@ fn emit_variables_in_block(
 ) {
     for item in &block.items {
         match item {
-            BlockItem::Statement(statement) => match statement {
-                Statement::If(_, then, r#else) => {
-                    if let Statement::Compound(block) = then.as_ref() {
-                        emit_variables_in_block(block, variables, names);
-                    }
-                    if let Some(Statement::Compound(block)) = r#else.as_deref() {
-                        emit_variables_in_block(block, variables, names);
-                    }
-                }
-                Statement::Compound(block) => emit_variables_in_block(block, variables, names),
-                Statement::Return(_) | Statement::Expression(_) | Statement::Null => {}
-            },
+            BlockItem::Statement(statement) => {
+                emit_variables_in_statement(statement, variables, names)
+            }
             BlockItem::Declaration(declaration) => {
-                if !names.contains(&declaration.name) {
-                    let variable = Variable {
-                        name: declaration.name.clone(),
-                        r#type: emit_type(declaration.r#type),
-                    };
-                    variables.push(variable);
-                    names.insert(declaration.name.clone());
-                }
+                emit_variables_in_declaration(declaration, variables, names)
             }
         }
+    }
+}
+
+fn emit_variables_in_statement(
+    statement: &Statement,
+    variables: &mut Vec<Variable>,
+    names: &mut BTreeSet<String>,
+) {
+    match statement {
+        Statement::If(_, then, r#else) => {
+            emit_variables_in_statement(then.as_ref(), variables, names);
+            if let Some(r#else) = r#else.as_deref() {
+                emit_variables_in_statement(r#else, variables, names)
+            }
+        }
+        Statement::Compound(block) => emit_variables_in_block(block, variables, names),
+        Statement::While(_, _, statement) | Statement::DoWhile(_, statement, _) => {
+            emit_variables_in_statement(statement, variables, names)
+        }
+        Statement::For(_, for_init, _, _, statement) => {
+            if let Some(ForInit::Declaration(declaration)) = for_init {
+                emit_variables_in_declaration(declaration, variables, names);
+            }
+            emit_variables_in_statement(statement, variables, names);
+        }
+        Statement::Return(_)
+        | Statement::Expression(_)
+        | Statement::Break(_)
+        | Statement::Continue(_)
+        | Statement::Null => {}
+    }
+}
+
+fn emit_variables_in_declaration(
+    declaration: &Declaration,
+    variables: &mut Vec<Variable>,
+    names: &mut BTreeSet<String>,
+) {
+    if !names.contains(&declaration.name) {
+        let variable = Variable {
+            name: declaration.name.clone(),
+            r#type: emit_type(declaration.r#type),
+        };
+        variables.push(variable);
+        names.insert(declaration.name.clone());
     }
 }
 
@@ -85,12 +118,14 @@ fn emit_block(block: Block, instructions: &mut Vec<Instruction>) {
 fn emit_block_item(block_item: BlockItem, instructions: &mut Vec<Instruction>) {
     match block_item {
         BlockItem::Statement(statement) => emit_statement(statement, instructions),
-        BlockItem::Declaration(declaration) => {
-            if let Some(init) = declaration.init {
-                emit_expression(init, instructions);
-                instructions.push(Instruction::LocalSet(declaration.name));
-            }
-        }
+        BlockItem::Declaration(declaration) => emit_declaration(declaration, instructions),
+    }
+}
+
+fn emit_declaration(declaration: Declaration, instructions: &mut Vec<Instruction>) {
+    if let Some(init) = declaration.init {
+        emit_expression(init, instructions);
+        instructions.push(Instruction::LocalSet(declaration.name));
     }
 }
 
@@ -100,10 +135,7 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
             emit_expression(expression, instructions);
             instructions.push(Instruction::Return);
         }
-        Statement::Expression(expression) => {
-            emit_expression(expression, instructions);
-            instructions.push(Instruction::Drop);
-        }
+        Statement::Expression(expression) => emit_expression_as_statement(expression, instructions),
         Statement::If(condition, then, r#else) => {
             emit_expression(condition, instructions);
             instructions.push(Instruction::If);
@@ -121,8 +153,90 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
                 emit_block_item(item, instructions);
             }
         }
+        Statement::Break(label) => {
+            let break_label = emit_label(&label, BREAK_LABEL);
+            instructions.push(Instruction::Branch(break_label));
+        }
+        Statement::Continue(label) => {
+            let continue_label = emit_label(&label, CONTINUE_LABEL);
+            instructions.push(Instruction::Branch(continue_label));
+        }
+        Statement::While(label, condition, body) => {
+            let (continue_label, break_label) =
+                emit_loop_start(&label, CONTINUE_LABEL, instructions);
+            emit_expression(condition, instructions);
+            instructions.push(Instruction::Eqz);
+            instructions.push(Instruction::BranchIf(break_label));
+            emit_statement(*body, instructions);
+            instructions.push(Instruction::Branch(continue_label));
+            emit_loop_end(instructions);
+        }
+        Statement::DoWhile(label, body, condition) => {
+            let (post_label, _) = emit_loop_start(&label, POST_LABEL, instructions);
+            let continue_label = emit_label(&label, CONTINUE_LABEL);
+            instructions.push(Instruction::Block(continue_label));
+            emit_statement(*body, instructions);
+            instructions.push(Instruction::End);
+            emit_expression(condition, instructions);
+            instructions.push(Instruction::BranchIf(post_label));
+            emit_loop_end(instructions);
+        }
+        Statement::For(label, for_init, condition, post, body) => {
+            if let Some(for_init) = for_init {
+                emit_for_init(for_init, instructions);
+            }
+            let (post_label, break_label) = emit_loop_start(&label, POST_LABEL, instructions);
+            let continue_label = emit_label(&label, CONTINUE_LABEL);
+            instructions.push(Instruction::Block(continue_label));
+
+            if let Some(condition) = condition {
+                emit_expression(condition, instructions);
+                instructions.push(Instruction::Eqz);
+                instructions.push(Instruction::BranchIf(break_label));
+            }
+
+            emit_statement(*body, instructions);
+
+            instructions.push(Instruction::End);
+
+            if let Some(post) = post {
+                emit_expression_as_statement(post, instructions);
+            }
+
+            instructions.push(Instruction::Branch(post_label));
+            emit_loop_end(instructions);
+        }
         Statement::Null => instructions.push(Instruction::Nop),
     }
+}
+
+fn emit_loop_start(
+    label: &str,
+    continue_label: &str,
+    instructions: &mut Vec<Instruction>,
+) -> (String, String) {
+    let continue_label = emit_label(label, continue_label);
+    let break_label = emit_label(label, BREAK_LABEL);
+    instructions.push(Instruction::Loop(continue_label.clone()));
+    instructions.push(Instruction::Block(break_label.clone()));
+    (continue_label, break_label)
+}
+
+fn emit_loop_end(instructions: &mut Vec<Instruction>) {
+    instructions.push(Instruction::End);
+    instructions.push(Instruction::End);
+}
+
+fn emit_for_init(for_init: ForInit, instructions: &mut Vec<Instruction>) {
+    match for_init {
+        ForInit::Declaration(declaration) => emit_declaration(declaration, instructions),
+        ForInit::Expression(expression) => emit_expression_as_statement(expression, instructions),
+    }
+}
+
+fn emit_expression_as_statement(expression: Expression, instructions: &mut Vec<Instruction>) {
+    emit_expression(expression, instructions);
+    instructions.push(Instruction::Drop);
 }
 
 fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) {
@@ -343,4 +457,12 @@ fn emit_type(r#type: AstType) -> IrType {
         AstType::Int => IrType::Int32,
         AstType::Void => IrType::Void,
     }
+}
+
+fn emit_label(identifier: &str, r#type: &str) -> String {
+    let mut label = String::with_capacity(identifier.len() + r#type.len() + 1);
+    label.push_str(identifier);
+    label.push('.');
+    label.push_str(r#type);
+    label
 }

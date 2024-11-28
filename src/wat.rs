@@ -120,7 +120,6 @@ impl Wat {
                 self.out.push_str("else");
                 self.level += 1;
             }
-            Instruction::End => self.out.push_str("end"),
             Instruction::Select => self.out.push_str("select"),
             Instruction::Return => self.out.push_str("return"),
             Instruction::LocalGet(name) => {
@@ -139,6 +138,27 @@ impl Wat {
                 self.out.push(')');
             }
             Instruction::Drop => self.out.push_str("drop"),
+            Instruction::Loop(label) => {
+                self.out.push_str("loop $");
+                self.out.push_str(&label);
+                self.level += 1;
+            }
+            Instruction::Block(label) => {
+                self.out.push_str("block $");
+                self.out.push_str(&label);
+                self.level += 1;
+            }
+            Instruction::Branch(label) => {
+                self.out.push_str("(br $");
+                self.out.push_str(&label);
+                self.out.push(')');
+            }
+            Instruction::BranchIf(label) => {
+                self.out.push_str("(br_if $");
+                self.out.push_str(&label);
+                self.out.push(')');
+            }
+            Instruction::End => self.out.push_str("end"),
             Instruction::Nop => self.out.push_str("nop"),
         }
     }

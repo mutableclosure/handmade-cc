@@ -18,7 +18,24 @@ pub enum Statement {
     Expression(Expression),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
     Compound(Block),
+    Break(String),
+    Continue(String),
+    While(String, Expression, Box<Statement>),
+    DoWhile(String, Box<Statement>, Expression),
+    For(
+        String,
+        Option<ForInit>,
+        Option<Expression>,
+        Option<Expression>,
+        Box<Statement>,
+    ),
     Null,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum ForInit {
+    Declaration(Declaration),
+    Expression(Expression),
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
