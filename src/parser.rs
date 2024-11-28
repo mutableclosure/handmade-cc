@@ -1,6 +1,7 @@
 use crate::{
     ast::{
-        BinaryOp, BlockItem, Declaration, Expression, FunctionDefinition, Program, Statement, Type,
+        BinaryOp, Block, BlockItem, Declaration, Expression, FunctionDefinition, Program,
+        Statement, Type,
     },
     environment::Environment,
     lexer::Lexer,
@@ -57,29 +58,13 @@ impl Parser<'_> {
         self.expect_token(Token::OpenParenthesis)?;
         self.expect_token(Token::Keyword(Keyword::Void))?;
         self.expect_token(Token::CloseParenthesis)?;
-        self.expect_token(Token::OpenBrace)?;
-
-        let mut body = Vec::new();
-
-        while self.peek_any_token_but(Token::CloseBrace)? {
-            body.push(self.block_item()?);
-        }
-
-        self.expect_token(Token::CloseBrace)?;
+        let body = self.block()?;
 
         Ok(FunctionDefinition {
             name,
             return_type,
             body,
         })
-    }
-
-    fn block_item(&mut self) -> Result<BlockItem, Error> {
-        if self.peek_token(Token::Keyword(Keyword::Int))? {
-            Ok(BlockItem::Declaration(self.declaration()?))
-        } else {
-            Ok(BlockItem::Statement(self.statement()?))
-        }
     }
 
     fn statement(&mut self) -> Result<Statement, Error> {
@@ -111,11 +96,36 @@ impl Parser<'_> {
 
                 Ok(Statement::If(condition, then, r#else))
             }
+            Some(Token::OpenBrace) => Ok(Statement::Compound(self.block()?)),
             _ => {
                 let expression = self.expression(0)?;
                 self.expect_token(Token::Semicolon)?;
                 Ok(Statement::Expression(expression))
             }
+        }
+    }
+
+    fn block(&mut self) -> Result<Block, Error> {
+        self.expect_token(Token::OpenBrace)?;
+        self.environment.nest();
+
+        let mut items = Vec::new();
+
+        while self.peek_any_token_but(Token::CloseBrace)? {
+            items.push(self.block_item()?);
+        }
+
+        self.expect_token(Token::CloseBrace)?;
+        self.environment.unnest();
+
+        Ok(Block { items })
+    }
+
+    fn block_item(&mut self) -> Result<BlockItem, Error> {
+        if self.peek_token(Token::Keyword(Keyword::Int))? {
+            Ok(BlockItem::Declaration(self.declaration()?))
+        } else {
+            Ok(BlockItem::Statement(self.statement()?))
         }
     }
 

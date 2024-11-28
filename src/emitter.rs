@@ -1,11 +1,12 @@
 use crate::{
     ast::{
-        BinaryOp, BlockItem, Expression, FunctionDefinition, Program, Statement, Type as AstType,
+        BinaryOp, Block, BlockItem, Expression, FunctionDefinition, Program, Statement,
+        Type as AstType,
     },
     ir::{Function, Instruction, Module, Type as IrType, Variable},
     Error,
 };
-use alloc::{string::String, vec::Vec};
+use alloc::{collections::btree_set::BTreeSet, string::String, vec::Vec};
 
 #[derive(Clone, Debug)]
 pub struct Emitter;
@@ -34,27 +35,49 @@ fn emit_func_def(func_def: FunctionDefinition) -> Function {
     }
 }
 
-fn emit_variables(block: &[BlockItem]) -> Vec<Variable> {
+fn emit_variables(block: &Block) -> Vec<Variable> {
     let mut variables = Vec::new();
-
-    for item in block {
-        match item {
-            BlockItem::Statement(_) => {}
-            BlockItem::Declaration(declaration) => {
-                let variable = Variable {
-                    name: declaration.name.clone(),
-                    r#type: emit_type(declaration.r#type),
-                };
-                variables.push(variable);
-            }
-        }
-    }
-
+    let mut names = BTreeSet::new();
+    emit_variables_in_block(block, &mut variables, &mut names);
     variables
 }
 
-fn emit_block(block: Vec<BlockItem>, instructions: &mut Vec<Instruction>) {
+fn emit_variables_in_block(
+    block: &Block,
+    variables: &mut Vec<Variable>,
+    names: &mut BTreeSet<String>,
+) {
+    for item in &block.items {
+        match item {
+            BlockItem::Statement(statement) => match statement {
+                Statement::If(_, then, r#else) => {
+                    if let Statement::Compound(block) = then.as_ref() {
+                        emit_variables_in_block(block, variables, names);
+                    }
+                    if let Some(Statement::Compound(block)) = r#else.as_deref() {
+                        emit_variables_in_block(block, variables, names);
+                    }
+                }
+                Statement::Compound(block) => emit_variables_in_block(block, variables, names),
+                Statement::Return(_) | Statement::Expression(_) | Statement::Null => {}
+            },
+            BlockItem::Declaration(declaration) => {
+                if !names.contains(&declaration.name) {
+                    let variable = Variable {
+                        name: declaration.name.clone(),
+                        r#type: emit_type(declaration.r#type),
+                    };
+                    variables.push(variable);
+                    names.insert(declaration.name.clone());
+                }
+            }
+        }
+    }
+}
+
+fn emit_block(block: Block, instructions: &mut Vec<Instruction>) {
     block
+        .items
         .into_iter()
         .for_each(|item| emit_block_item(item, instructions));
 }
@@ -92,6 +115,11 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
             }
 
             instructions.push(Instruction::End);
+        }
+        Statement::Compound(block) => {
+            for item in block.items.into_iter() {
+                emit_block_item(item, instructions);
+            }
         }
         Statement::Null => instructions.push(Instruction::Nop),
     }

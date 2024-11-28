@@ -5,47 +5,55 @@ use crate::{
 use alloc::{
     collections::BTreeMap,
     string::{String, ToString},
+    vec::Vec,
 };
 
 #[derive(Clone, Default, Debug)]
 pub struct Environment {
-    symbols: BTreeMap<String, Symbol>,
-    level: usize,
+    symbols: Vec<BTreeMap<String, Symbol>>,
 }
 
 impl Environment {
-    pub fn declare_variable(&mut self, identifier: &str) -> Result<String, ErrorKind> {
-        let name = self.make_name(identifier);
+    pub fn nest(&mut self) {
+        self.symbols.push(BTreeMap::default());
+    }
 
-        if self.symbols.contains_key(&name) {
+    pub fn unnest(&mut self) {
+        self.symbols.pop();
+    }
+
+    pub fn declare_variable(&mut self, identifier: &str) -> Result<String, ErrorKind> {
+        let name = make_name(identifier, self.symbols.len());
+        let symbols = self.symbols.last_mut().unwrap();
+
+        if symbols.contains_key(&name) {
             Err(ErrorKind::Redefined(name))
         } else {
             let symbol = Symbol {
                 r#type: Type::Variable,
             };
-            self.symbols.insert(name.clone(), symbol);
+            symbols.insert(name.clone(), symbol);
             Ok(name)
         }
     }
 
-    pub fn resolve_variable(&mut self, identifier: &str) -> Result<String, ErrorKind> {
-        let name = self.make_name(identifier);
-
-        if let Some(symbol) = self.symbols.get(&name) {
-            assert!(symbol.r#type == Type::Variable);
-            Ok(name)
-        } else {
-            Err(ErrorKind::Undeclared(name))
+    pub fn resolve_variable(&self, identifier: &str) -> Result<String, ErrorKind> {
+        for (level, symbols) in self.symbols.iter().enumerate().rev() {
+            let name = make_name(identifier, level + 1);
+            if let Some(symbol) = symbols.get(&name) {
+                assert!(symbol.r#type == Type::Variable);
+                return Ok(name);
+            }
         }
+
+        Err(ErrorKind::Undeclared(identifier.to_string()))
     }
 }
 
-impl Environment {
-    fn make_name(&self, identifier: &str) -> String {
-        let mut name = String::with_capacity(identifier.len() + 4);
-        name.push_str(identifier);
-        name.push('.');
-        name.push_str(&self.level.to_string());
-        name
-    }
+fn make_name(identifier: &str, level: usize) -> String {
+    let mut name = String::with_capacity(identifier.len() + 4);
+    name.push_str(identifier);
+    name.push('.');
+    name.push_str(&level.to_string());
+    name
 }

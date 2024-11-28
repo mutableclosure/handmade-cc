@@ -9,13 +9,7 @@ pub struct Program {
 pub struct FunctionDefinition {
     pub name: String,
     pub return_type: Type,
-    pub body: Vec<BlockItem>,
-}
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub enum BlockItem {
-    Statement(Statement),
-    Declaration(Declaration),
+    pub body: Block,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -23,7 +17,19 @@ pub enum Statement {
     Return(Expression),
     Expression(Expression),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
+    Compound(Block),
     Null,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Block {
+    pub items: Vec<BlockItem>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum BlockItem {
+    Statement(Statement),
+    Declaration(Declaration),
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
