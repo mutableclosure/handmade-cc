@@ -22,6 +22,7 @@ pub enum BlockItem {
 pub enum Statement {
     Return(Expression),
     Expression(Expression),
+    If(Expression, Box<Statement>, Option<Box<Statement>>),
     Null,
 }
 
@@ -44,6 +45,7 @@ pub enum Expression {
     PostfixIncrement(Box<Expression>),
     PostfixDecrement(Box<Expression>),
     BinaryOp(BinaryOp, Box<Expression>, Box<Expression>),
+    Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]

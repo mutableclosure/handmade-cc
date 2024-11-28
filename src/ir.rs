@@ -39,6 +39,7 @@ pub enum Instruction {
     Le,
     Gt,
     Ge,
+    If,
     IfWithResult,
     Else,
     End,

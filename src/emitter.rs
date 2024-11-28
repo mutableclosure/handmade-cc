@@ -81,6 +81,18 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
             emit_expression(expression, instructions);
             instructions.push(Instruction::Drop);
         }
+        Statement::If(condition, then, r#else) => {
+            emit_expression(condition, instructions);
+            instructions.push(Instruction::If);
+            emit_statement(*then, instructions);
+
+            if let Some(r#else) = r#else {
+                instructions.push(Instruction::Else);
+                emit_statement(*r#else, instructions);
+            }
+
+            instructions.push(Instruction::End);
+        }
         Statement::Null => instructions.push(Instruction::Nop),
     }
 }
@@ -88,6 +100,7 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
 fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) {
     match expression {
         Expression::Constant(value) => instructions.push(Instruction::PushConstant(value)),
+        Expression::Variable(name) => instructions.push(Instruction::LocalGet(name)),
         Expression::BitwiseComplement(expression) => {
             emit_expression(*expression, instructions);
             instructions.push(Instruction::PushConstant(-1));
@@ -223,7 +236,14 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
         Expression::BinaryOp(BinaryOp::RightShiftAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::ShiftRight, instructions);
         }
-        Expression::Variable(name) => instructions.push(Instruction::LocalGet(name)),
+        Expression::Conditional(condition, then, r#else) => {
+            emit_expression(*condition, instructions);
+            instructions.push(Instruction::IfWithResult);
+            emit_expression(*then, instructions);
+            instructions.push(Instruction::Else);
+            emit_expression(*r#else, instructions);
+            instructions.push(Instruction::End);
+        }
     }
 }
 

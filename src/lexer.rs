@@ -129,6 +129,8 @@ impl Lexer<'_> {
                     return Ok(Some(Token::GreaterThanOrEqualToOp))
                 }
                 '>' => return Ok(Some(Token::GreaterThanOp)),
+                '?' => return Ok(Some(Token::QuestionMark)),
+                ':' => return Ok(Some(Token::Colon)),
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }
@@ -165,6 +167,8 @@ impl Lexer<'_> {
             "int" => Token::Keyword(Keyword::Int),
             "void" => Token::Keyword(Keyword::Void),
             "return" => Token::Keyword(Keyword::Return),
+            "if" => Token::Keyword(Keyword::If),
+            "else" => Token::Keyword(Keyword::Else),
             _ => Token::Identifier(identifier),
         }
     }

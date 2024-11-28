@@ -17,6 +17,12 @@ pub struct Parser<'a> {
     environment: Environment,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub enum Op {
+    Binary(BinaryOp),
+    Conditional,
+}
+
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
@@ -79,16 +85,37 @@ impl Parser<'_> {
     fn statement(&mut self) -> Result<Statement, Error> {
         match self.lexer.peek()? {
             Some(Token::Keyword(Keyword::Return)) => {
-                self.expect_token(Token::Keyword(Keyword::Return))?;
+                self.lexer.next()?;
                 let expression = self.expression(0)?;
                 self.expect_token(Token::Semicolon)?;
                 Ok(Statement::Return(expression))
             }
             Some(Token::Semicolon) => {
-                self.expect_token(Token::Semicolon)?;
+                self.lexer.next()?;
                 Ok(Statement::Null)
             }
-            _ => Ok(Statement::Expression(self.expression(0)?)),
+            Some(Token::Keyword(Keyword::If)) => {
+                self.lexer.next()?;
+                self.expect_token(Token::OpenParenthesis)?;
+                let condition = self.expression(0)?;
+                self.expect_token(Token::CloseParenthesis)?;
+                let then = self.statement()?.into();
+
+                let r#else = if self.peek_token(Token::Keyword(Keyword::Else))? {
+                    self.lexer.next()?;
+                    Some(self.statement()?)
+                } else {
+                    None
+                }
+                .map(|s| s.into());
+
+                Ok(Statement::If(condition, then, r#else))
+            }
+            _ => {
+                let expression = self.expression(0)?;
+                self.expect_token(Token::Semicolon)?;
+                Ok(Statement::Expression(expression))
+            }
         }
     }
 
@@ -118,7 +145,7 @@ impl Parser<'_> {
         let mut left = self.factor()?;
         let mut token = self.lexer.peek()?;
 
-        while let Some(op) = token.and_then(binary_op) {
+        while let Some(op) = token.and_then(op) {
             let precedence = precedence(op);
 
             if precedence < min_precedence {
@@ -127,15 +154,26 @@ impl Parser<'_> {
 
             self.lexer.next()?;
 
-            let precedence = if is_assignment(op) {
-                self.expect_lvalue(&left)?;
-                precedence
-            } else {
-                precedence.saturating_add(1)
-            };
+            match op {
+                Op::Binary(op) => {
+                    let precedence = if is_assignment(op) {
+                        self.expect_lvalue(&left)?;
+                        precedence
+                    } else {
+                        precedence.saturating_add(1)
+                    };
 
-            let right = self.expression(precedence)?;
-            left = Expression::BinaryOp(op, left.into(), right.into());
+                    let right = self.expression(precedence)?;
+                    left = Expression::BinaryOp(op, left.into(), right.into());
+                }
+                Op::Conditional => {
+                    let middle = self.expression(0)?;
+                    self.expect_token(Token::Colon)?;
+                    let right = self.expression(precedence)?;
+                    left = Expression::Conditional(left.into(), middle.into(), right.into());
+                }
+            }
+
             token = self.lexer.peek()?;
         }
 
@@ -252,6 +290,12 @@ impl Parser<'_> {
     }
 }
 
+fn op(token: &Token) -> Option<Op> {
+    binary_op(token)
+        .map(Op::Binary)
+        .or_else(|| matches!(token, Token::QuestionMark).then(|| Op::Conditional))
+}
+
 fn binary_op(token: &Token) -> Option<BinaryOp> {
     match token {
         Token::PlusSign => Some(BinaryOp::Add),
@@ -287,32 +331,35 @@ fn binary_op(token: &Token) -> Option<BinaryOp> {
     }
 }
 
-fn precedence(op: BinaryOp) -> u32 {
+fn precedence(op: Op) -> u32 {
     match op {
-        BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Remainder => 50,
-        BinaryOp::Add | BinaryOp::Subtract => 45,
-        BinaryOp::LeftShift | BinaryOp::RightShift => 40,
-        BinaryOp::LessThan
-        | BinaryOp::LessThanOrEqualTo
-        | BinaryOp::GreaterThan
-        | BinaryOp::GreaterThanOrEqualTo => 35,
-        BinaryOp::EqualTo | BinaryOp::NotEqualTo => 30,
-        BinaryOp::BitwiseAnd => 25,
-        BinaryOp::Xor => 20,
-        BinaryOp::BitwiseOr => 15,
-        BinaryOp::And => 10,
-        BinaryOp::Or => 5,
-        BinaryOp::Assignment
-        | BinaryOp::AddAssignment
-        | BinaryOp::SubtractAssignment
-        | BinaryOp::MultiplyAssignment
-        | BinaryOp::DivideAssignment
-        | BinaryOp::RemainderAssignment
-        | BinaryOp::LeftShiftAssignment
-        | BinaryOp::RightShiftAssignment
-        | BinaryOp::BitwiseAndAssignment
-        | BinaryOp::BitwiseOrAssignment
-        | BinaryOp::XorAssignment => 1,
+        Op::Binary(op) => match op {
+            BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Remainder => 50,
+            BinaryOp::Add | BinaryOp::Subtract => 45,
+            BinaryOp::LeftShift | BinaryOp::RightShift => 40,
+            BinaryOp::LessThan
+            | BinaryOp::LessThanOrEqualTo
+            | BinaryOp::GreaterThan
+            | BinaryOp::GreaterThanOrEqualTo => 35,
+            BinaryOp::EqualTo | BinaryOp::NotEqualTo => 30,
+            BinaryOp::BitwiseAnd => 25,
+            BinaryOp::Xor => 20,
+            BinaryOp::BitwiseOr => 15,
+            BinaryOp::And => 10,
+            BinaryOp::Or => 5,
+            BinaryOp::Assignment
+            | BinaryOp::AddAssignment
+            | BinaryOp::SubtractAssignment
+            | BinaryOp::MultiplyAssignment
+            | BinaryOp::DivideAssignment
+            | BinaryOp::RemainderAssignment
+            | BinaryOp::LeftShiftAssignment
+            | BinaryOp::RightShiftAssignment
+            | BinaryOp::BitwiseAndAssignment
+            | BinaryOp::BitwiseOrAssignment
+            | BinaryOp::XorAssignment => 1,
+        },
+        Op::Conditional => 3,
     }
 }
 

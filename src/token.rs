@@ -44,6 +44,8 @@ pub enum Token {
     TwoGreaterThanOpsEqualSign,
     TwoPlusSigns,
     TwoHyphens,
+    QuestionMark,
+    Colon,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -51,6 +53,8 @@ pub enum Keyword {
     Int,
     Void,
     Return,
+    If,
+    Else,
 }
 
 impl Display for Token {
@@ -97,6 +101,8 @@ impl Display for Token {
             Token::TwoGreaterThanOpsEqualSign => write!(f, ">>="),
             Token::TwoPlusSigns => write!(f, "++"),
             Token::TwoHyphens => write!(f, "--"),
+            Token::QuestionMark => write!(f, "?"),
+            Token::Colon => write!(f, ":"),
         }
     }
 }
@@ -107,6 +113,8 @@ impl Display for Keyword {
             Keyword::Int => write!(f, "int"),
             Keyword::Void => write!(f, "void"),
             Keyword::Return => write!(f, "return"),
+            Keyword::If => write!(f, "if"),
+            Keyword::Else => write!(f, "else"),
         }
     }
 }

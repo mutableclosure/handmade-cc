@@ -108,6 +108,10 @@ impl Wat {
             Instruction::Le => self.out.push_str("i32.le_s"),
             Instruction::Gt => self.out.push_str("i32.gt_s"),
             Instruction::Ge => self.out.push_str("i32.ge_s"),
+            Instruction::If => {
+                self.out.push_str("if");
+                self.level += 1;
+            }
             Instruction::IfWithResult => {
                 self.out.push_str("if (result i32)");
                 self.level += 1;
