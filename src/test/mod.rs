@@ -1,4 +1,5 @@
 use handmade_cc::Compiler;
+use std::time::Instant;
 use wasmi::{Caller, Engine, Func, Linker, Memory, MemoryType, Module, Store};
 
 const MEMORY_PAGES: u32 = 1;
@@ -6,6 +7,7 @@ const ENV_MODULE: &str = "env";
 const MEMORY_NAME: &str = "memory";
 const MAIN_NAME: &str = "main";
 const PUT_CHAR_NAME: &str = "putchar";
+const MAX_EXECUTION_TIME: f64 = 2.0;
 
 #[cfg(feature = "std")]
 static INIT: std::sync::Once = std::sync::Once::new();
@@ -47,7 +49,14 @@ fn build_and_run(source_code: &str) -> Result<i32, String> {
     let main = instance
         .get_typed_func::<(), i32>(&store, MAIN_NAME)
         .map_err(|error| error.to_string())?;
-    main.call(&mut store, ()).map_err(|error| error.to_string())
+
+    let start = Instant::now();
+    let result = main.call(&mut store, ()).map_err(|error| error.to_string());
+    if start.elapsed().as_secs_f64() > MAX_EXECUTION_TIME {
+        panic!("Execution took too long!");
+    }
+
+    result
 }
 
 fn putchar(_: Caller<'_, ()>, c: i32) -> i32 {
