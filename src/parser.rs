@@ -1,9 +1,9 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Declaration, Expression, ForInit, FunctionDefinition, Program,
-        Statement, Type,
+        BinaryOp, Block, BlockItem, Expression, ForInit, FunctionBody, FunctionDeclaration,
+        FunctionParameter, Program, Statement, Type, VariableDeclaration,
     },
-    environment::Environment,
+    environment::{Environment, FunctionDeclarationType, Symbol},
     lexer::Lexer,
     token::{Keyword, Token},
     Error, ErrorKind, Severity,
@@ -23,9 +23,15 @@ pub struct Parser<'a> {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub enum Op {
+enum Op {
     Binary(BinaryOp),
     Conditional,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+enum DeclarationScope {
+    Extern,
+    Static,
 }
 
 impl<'a> Parser<'a> {
@@ -40,35 +46,201 @@ impl<'a> Parser<'a> {
         let mut functions = Vec::new();
 
         while let Some(token) = self.lexer.next()? {
-            let function = match token {
-                Token::Keyword(Keyword::Int) => self.function_definition(Type::Int),
-                Token::Keyword(Keyword::Void) => self.function_definition(Type::Void),
+            if let Some(function) = match token {
+                Token::Keyword(Keyword::Int) => {
+                    self.declaration(Type::Int, DeclarationScope::Static)
+                }
+                Token::Keyword(Keyword::Void) => {
+                    self.declaration(Type::Void, DeclarationScope::Static)
+                }
+                Token::Keyword(Keyword::Extern) => self.extern_declaration(),
                 _ => Err(self.err(ErrorKind::UnknownType(token))),
-            }?;
-            functions.push(function);
+            }? {
+                functions.push(function);
+            }
         }
 
-        let Some(main) = functions.into_iter().find(|function| function.name == MAIN) else {
-            return Err(self.err(ErrorKind::UndefinedMain));
-        };
+        self.lexer.clear_line_number();
 
-        Ok(Program { main })
+        if !functions.iter().any(|f| f.name == MAIN) {
+            return Err(self.err(ErrorKind::UndefinedFunction(MAIN.to_string())));
+        }
+
+        self.verify_calls(&functions)?;
+
+        Ok(Program { functions })
     }
 }
 
 impl Parser<'_> {
-    fn function_definition(&mut self, return_type: Type) -> Result<FunctionDefinition, Error> {
-        let name = self.expect_identifier()?;
-        self.expect_token(Token::OpenParenthesis)?;
-        self.expect_token(Token::Keyword(Keyword::Void))?;
-        self.expect_token(Token::CloseParenthesis)?;
-        let body = self.block()?;
+    fn verify_calls(&self, functions: &[FunctionDeclaration]) -> Result<(), Error> {
+        for function in functions {
+            match &function.body {
+                FunctionBody::Extern => {}
+                FunctionBody::Block(block) => self.verify_calls_in_block(block)?,
+            }
+        }
 
-        Ok(FunctionDefinition {
-            name,
-            return_type,
-            body,
-        })
+        Ok(())
+    }
+
+    fn verify_calls_in_block(&self, block: &Block) -> Result<(), Error> {
+        for item in &block.items {
+            match item {
+                BlockItem::Statement(statement) => self.verify_calls_in_statement(statement)?,
+                BlockItem::VariableDeclaration(_) => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    fn verify_calls_in_statement(&self, statement: &Statement) -> Result<(), Error> {
+        match statement {
+            Statement::Expression(expression) => self.verify_calls_in_expression(expression)?,
+            Statement::If(expression, statement, statement1) => {
+                self.verify_calls_in_expression(expression)?;
+                self.verify_calls_in_statement(statement)?;
+                if let Some(statement) = statement1 {
+                    self.verify_calls_in_statement(statement)?;
+                }
+            }
+            Statement::Compound(block) => self.verify_calls_in_block(block)?,
+            Statement::While(_, expression, statement) => {
+                self.verify_calls_in_expression(expression)?;
+                self.verify_calls_in_statement(statement)?;
+            }
+            Statement::DoWhile(_, statement, expression) => {
+                self.verify_calls_in_statement(statement)?;
+                self.verify_calls_in_expression(expression)?;
+            }
+            Statement::For(_, for_init, expression, expression1, statement) => {
+                if let Some(for_init) = for_init {
+                    match for_init {
+                        ForInit::Declaration(_) => {}
+                        ForInit::Expression(expression) => {
+                            self.verify_calls_in_expression(expression)?
+                        }
+                    }
+                }
+                if let Some(expression) = expression {
+                    self.verify_calls_in_expression(expression)?;
+                }
+                if let Some(expression) = expression1 {
+                    self.verify_calls_in_expression(expression)?;
+                }
+                self.verify_calls_in_statement(statement)?;
+            }
+            Statement::Return(_)
+            | Statement::Break(_)
+            | Statement::Continue(_)
+            | Statement::Null => {}
+        }
+
+        Ok(())
+    }
+
+    fn verify_calls_in_expression(&self, expression: &Expression) -> Result<(), Error> {
+        if let Expression::FunctionCall(name, _) = expression {
+            if !self.environment.is_function_defined(name) {
+                return Err(self.err(ErrorKind::UndefinedFunction(name.clone())));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn extern_declaration(&mut self) -> Result<Option<FunctionDeclaration>, Error> {
+        let token = self.lexer.next()?;
+
+        match token {
+            Some(Token::Keyword(Keyword::Int)) => {
+                self.declaration(Type::Int, DeclarationScope::Extern)
+            }
+            Some(Token::Keyword(Keyword::Void)) => {
+                self.declaration(Type::Void, DeclarationScope::Extern)
+            }
+            _ => Err(self.err(
+                token
+                    .map(ErrorKind::UnknownType)
+                    .unwrap_or_else(|| ErrorKind::ExpectedType),
+            )),
+        }
+    }
+
+    fn declaration(
+        &mut self,
+        r#type: Type,
+        scope: DeclarationScope,
+    ) -> Result<Option<FunctionDeclaration>, Error> {
+        let name = self.expect_identifier()?;
+        let parameters = self.function_parameters()?;
+        let declaration_type = match scope {
+            DeclarationScope::Extern => {
+                self.expect_token(Token::Semicolon)?;
+                FunctionDeclarationType::ExternDeclaration
+            }
+            DeclarationScope::Static => {
+                if self.peek_token(Token::Semicolon)? {
+                    self.lexer.next()?;
+                    FunctionDeclarationType::ForwardDeclaration
+                } else {
+                    FunctionDeclarationType::Definition
+                }
+            }
+        };
+
+        self.environment
+            .declare_function(name.clone(), parameters.clone(), r#type, declaration_type)
+            .map_err(|kind| self.err(kind))?;
+
+        match declaration_type {
+            FunctionDeclarationType::ExternDeclaration => Ok(Some(FunctionDeclaration {
+                name,
+                parameters,
+                return_type: r#type,
+                body: FunctionBody::Extern,
+            })),
+            FunctionDeclarationType::ForwardDeclaration => Ok(None),
+            FunctionDeclarationType::Definition => {
+                self.environment.enter_function(name.clone());
+                let body = FunctionBody::Block(self.block()?);
+                self.environment.exit_function();
+
+                Ok(Some(FunctionDeclaration {
+                    name,
+                    parameters,
+                    return_type: r#type,
+                    body,
+                }))
+            }
+        }
+    }
+
+    fn function_parameters(&mut self) -> Result<Vec<FunctionParameter>, Error> {
+        let mut parameters = Vec::new();
+        self.expect_token(Token::OpenParenthesis)?;
+
+        if self.peek_token(Token::Keyword(Keyword::Void))? {
+            self.lexer.next()?;
+        } else {
+            loop {
+                self.expect_token(Token::Keyword(Keyword::Int))?;
+                let name = self.expect_identifier()?;
+                let r#type = Type::Int;
+                parameters.push(FunctionParameter { name, r#type });
+
+                if !self.peek_token(Token::Comma)? {
+                    break;
+                }
+
+                self.lexer.next()?;
+            }
+        }
+
+        self.expect_token(Token::CloseParenthesis)?;
+
+        Ok(parameters)
     }
 
     fn statement(&mut self) -> Result<Statement, Error> {
@@ -161,7 +333,7 @@ impl Parser<'_> {
 
     fn for_init(&mut self) -> Result<Option<ForInit>, Error> {
         if self.peek_token(Token::Keyword(Keyword::Int))? {
-            Ok(Some(ForInit::Declaration(self.declaration()?)))
+            Ok(Some(ForInit::Declaration(self.variable_declaration()?)))
         } else if self.peek_token(Token::Semicolon)? {
             self.lexer.next()?;
             Ok(None)
@@ -208,13 +380,13 @@ impl Parser<'_> {
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {
         if self.peek_token(Token::Keyword(Keyword::Int))? {
-            Ok(BlockItem::Declaration(self.declaration()?))
+            Ok(BlockItem::VariableDeclaration(self.variable_declaration()?))
         } else {
             Ok(BlockItem::Statement(self.statement()?))
         }
     }
 
-    fn declaration(&mut self) -> Result<Declaration, Error> {
+    fn variable_declaration(&mut self) -> Result<VariableDeclaration, Error> {
         self.expect_token(Token::Keyword(Keyword::Int))?;
 
         let r#type = Type::Int;
@@ -233,7 +405,7 @@ impl Parser<'_> {
 
         self.expect_token(Token::Semicolon)?;
 
-        Ok(Declaration { name, r#type, init })
+        Ok(VariableDeclaration { name, r#type, init })
     }
 
     fn expression(&mut self, min_precedence: u32) -> Result<Expression, Error> {
@@ -281,7 +453,8 @@ impl Parser<'_> {
             Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoPlusSigns)? => {
                 self.lexer.next()?;
                 self.environment
-                    .resolve_variable(&identifier)
+                    .resolve_lvalue(&identifier)
+                    .map(|v| v.to_string())
                     .map(Expression::Variable)
                     .map_err(|kind| self.err(kind))
                     .map(Box::new)
@@ -290,17 +463,14 @@ impl Parser<'_> {
             Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoHyphens)? => {
                 self.lexer.next()?;
                 self.environment
-                    .resolve_variable(&identifier)
+                    .resolve_lvalue(&identifier)
+                    .map(|v| v.to_string())
                     .map(Expression::Variable)
                     .map_err(|kind| self.err(kind))
                     .map(Box::new)
                     .map(Expression::PostfixDecrement)
             }
-            Some(Token::Identifier(identifier)) => self
-                .environment
-                .resolve_variable(&identifier)
-                .map(Expression::Variable)
-                .map_err(|kind| self.err(kind)),
+            Some(Token::Identifier(identifier)) => self.symbol(&identifier),
             Some(Token::TwoPlusSigns) => {
                 let variable = self.factor()?;
                 self.expect_lvalue(&variable)?;
@@ -334,6 +504,39 @@ impl Parser<'_> {
                 Ok(expression)
             }
             token => Err(self.err(ErrorKind::ExpectedExpression(token))),
+        }
+    }
+
+    fn symbol(&mut self, identifier: &str) -> Result<Expression, Error> {
+        let (name, symbol) = self
+            .environment
+            .resolve_symbol(identifier)
+            .map_err(|kind| self.err(kind))?;
+
+        match symbol {
+            Symbol::Variable => Ok(Expression::Variable(name.to_string())),
+            Symbol::Function(function) => {
+                let name = name.to_string();
+                let parameters = function.parameters.values().copied().collect::<Vec<_>>();
+                assert!(matches!(function.return_type, Type::Int));
+                self.expect_token(Token::OpenParenthesis)?;
+
+                let mut arguments = Vec::new();
+
+                for (index, param_type) in parameters.iter().enumerate() {
+                    let argument = self.expression(0)?;
+                    assert!(matches!(param_type, Type::Int));
+                    arguments.push(argument);
+
+                    if index < parameters.len() - 1 {
+                        self.expect_token(Token::Comma)?;
+                    }
+                }
+
+                self.expect_token(Token::CloseParenthesis)?;
+
+                Ok(Expression::FunctionCall(name, arguments))
+            }
         }
     }
 

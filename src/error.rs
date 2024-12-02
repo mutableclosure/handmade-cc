@@ -7,15 +7,17 @@ pub enum Kind {
     InvalidToken(char),
     ConstantTooLarge,
     UnknownType(Token),
+    ExpectedType,
     ExpectedIdentifier(Option<Token>),
     ExpectedToken(Token, Option<Token>),
     ExpectedExpression(Option<Token>),
     Redefined(String),
     Undeclared(String),
+    ConflictingTypes(String),
     InvalidLvalue,
     BreakOutsideLoopOrSwitch,
     ContinueOutsideLoop,
-    UndefinedMain,
+    UndefinedFunction(String),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -57,6 +59,7 @@ impl Display for Kind {
             Kind::InvalidToken(found) => write!(f, "Invalid token: '{found}'"),
             Kind::ConstantTooLarge => write!(f, "Integer literal too large"),
             Kind::UnknownType(found) => write!(f, "Unknown type: '{found}'"),
+            Kind::ExpectedType => write!(f, "Expected type"),
             Kind::ExpectedIdentifier(found) => {
                 write!(f, "Expected identifier")?;
                 write_found(f, found)
@@ -71,12 +74,13 @@ impl Display for Kind {
             }
             Kind::Redefined(identifier) => write!(f, "Redefinition of '{identifier}'"),
             Kind::Undeclared(identifier) => write!(f, "'{identifier}' undeclared"),
+            Kind::ConflictingTypes(identifier) => write!(f, "Conflicting types for '{identifier}'"),
             Kind::InvalidLvalue => write!(f, "'Invalid lvalue"),
             Kind::BreakOutsideLoopOrSwitch => {
                 write!(f, "'break' statement not within a loop or switch")
             }
             Kind::ContinueOutsideLoop => write!(f, "'continue' statement not within a loop"),
-            Kind::UndefinedMain => write!(f, "Undefined reference to 'main'"),
+            Kind::UndefinedFunction(name) => write!(f, "Undefined reference to '{name}'"),
         }
     }
 }

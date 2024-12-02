@@ -1,9 +1,10 @@
-use crate::{
-    ir::{Function, Instruction, Module, Type},
-    Error,
-};
+use crate::ir::{ExternalFunction, Function, Instruction, Module, Type};
 use alloc::string::{String, ToString};
 use core::mem;
+
+const DEFAULT_EXTERNAL_MODULE: &str = "env";
+const PARAM_VARIABLE_TYPE: &str = "param";
+const LOCAL_VARIABLE_TYPE: &str = "local";
 
 #[derive(Clone, Default, Debug)]
 pub struct Wat {
@@ -12,7 +13,7 @@ pub struct Wat {
 }
 
 impl Wat {
-    pub fn generate(&mut self, module: Module) -> Result<String, Error> {
+    pub fn generate(&mut self, module: Module) -> String {
         self.out = String::new();
         self.out.push_str(
             r#"(module
@@ -20,6 +21,19 @@ impl Wat {
   (export "main" (func $main))
 "#,
         );
+
+        let last = module.external_functions.len().saturating_sub(1);
+
+        module
+            .external_functions
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, function)| {
+                self.generate_external_function(function);
+                if index < last {
+                    self.out.push('\n');
+                }
+            });
 
         let last = module.functions.len().saturating_sub(1);
 
@@ -36,29 +50,42 @@ impl Wat {
 
         self.out.push(')');
 
-        Ok(mem::take(&mut self.out))
+        mem::take(&mut self.out)
     }
 }
 
 impl Wat {
+    fn generate_external_function(&mut self, function: ExternalFunction) {
+        self.out.push_str(r#"  (import ""#);
+        self.out.push_str(DEFAULT_EXTERNAL_MODULE);
+        self.out.push_str(r#"" ""#);
+        self.out.push_str(&function.name);
+        self.out.push_str(r#"" (func $"#);
+        self.out.push_str(&function.name);
+        self.out.push('\n');
+
+        for parameter in &function.parameters {
+            self.generate_variable(&parameter.name, parameter.r#type, PARAM_VARIABLE_TYPE);
+        }
+
+        self.generate_result(function.return_type);
+
+        self.out.push_str("))");
+    }
+
     fn generate_function(&mut self, function: Function) {
         self.out.push_str(r#"  (func $"#);
         self.out.push_str(&function.name);
+        self.out.push('\n');
 
-        if function.return_type != Type::Void {
-            self.out.push_str(" (result ");
-            self.generate_type(function.return_type);
-            self.out.push_str(")\n");
+        for parameter in &function.parameters {
+            self.generate_variable(&parameter.name, parameter.r#type, PARAM_VARIABLE_TYPE);
         }
 
-        for variable in &function.local_variables {
-            self.out.push_str("    (local $");
-            self.out.push_str(&variable.name);
+        self.generate_result(function.return_type);
 
-            match variable.r#type {
-                Type::Int32 => self.out.push_str(" i32)\n"),
-                Type::Void => unreachable!(),
-            }
+        for variable in &function.local_variables {
+            self.generate_variable(&variable.name, variable.r#type, LOCAL_VARIABLE_TYPE);
         }
 
         let last = function.instructions.len().saturating_sub(1);
@@ -76,6 +103,26 @@ impl Wat {
             });
 
         self.out.push(')');
+    }
+
+    fn generate_variable(&mut self, name: &str, r#type: Type, kind: &str) {
+        self.out.push_str("    (");
+        self.out.push_str(kind);
+        self.out.push_str(" $");
+        self.out.push_str(name);
+
+        match r#type {
+            Type::Int32 => self.out.push_str(" i32)\n"),
+            Type::Void => unreachable!(),
+        }
+    }
+
+    fn generate_result(&mut self, return_type: Type) {
+        if return_type != Type::Void {
+            self.out.push_str("    (result ");
+            self.generate_type(return_type);
+            self.out.push_str(")\n");
+        }
     }
 
     fn generate_instruction(&mut self, instruction: Instruction) {
@@ -156,6 +203,11 @@ impl Wat {
             Instruction::BranchIf(label) => {
                 self.out.push_str("(br_if $");
                 self.out.push_str(&label);
+                self.out.push(')');
+            }
+            Instruction::Call(name) => {
+                self.out.push_str("(call $");
+                self.out.push_str(&name);
                 self.out.push(')');
             }
             Instruction::End => self.out.push_str("end"),

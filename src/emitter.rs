@@ -1,10 +1,9 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Declaration, Expression, ForInit, FunctionDefinition, Program,
-        Statement, Type as AstType,
+        BinaryOp, Block, BlockItem, Expression, ForInit, FunctionBody, FunctionParameter, Program,
+        Statement, Type as AstType, VariableDeclaration,
     },
-    ir::{Function, Instruction, Module, Type as IrType, Variable},
-    Error,
+    ir::{ExternalFunction, Function, Instruction, Module, Type as IrType, Variable},
 };
 use alloc::{collections::btree_set::BTreeSet, string::String, vec::Vec};
 
@@ -16,26 +15,51 @@ const POST_LABEL: &str = "post";
 pub struct Emitter;
 
 impl Emitter {
-    pub fn emit(&self, program: Program) -> Result<Module, Error> {
-        Ok(Module {
-            functions: vec![emit_func_def(program.main)],
-        })
-    }
-}
+    pub fn emit(&self, program: Program) -> Module {
+        let mut functions = Vec::new();
+        let mut external_functions = Vec::new();
 
-fn emit_func_def(func_def: FunctionDefinition) -> Function {
-    let return_type = emit_type(func_def.return_type);
+        for declaration in program.functions.into_iter() {
+            match declaration.body {
+                FunctionBody::Extern => {
+                    let function = ExternalFunction {
+                        name: declaration.name,
+                        return_type: declaration.return_type.into(),
+                        parameters: declaration
+                            .parameters
+                            .into_iter()
+                            .map(Variable::from)
+                            .collect(),
+                    };
+                    external_functions.push(function);
+                }
+                FunctionBody::Block(body) => {
+                    let return_type = declaration.return_type.into();
+                    let function = Function {
+                        name: declaration.name,
+                        local_variables: emit_variables(&body),
+                        parameters: declaration
+                            .parameters
+                            .into_iter()
+                            .map(Variable::from)
+                            .collect(),
+                        instructions: {
+                            let mut instructions = Vec::new();
+                            emit_block(body, &mut instructions);
+                            emit_return_if_needed(return_type, &mut instructions);
+                            instructions
+                        },
+                        return_type,
+                    };
+                    functions.push(function);
+                }
+            }
+        }
 
-    Function {
-        name: func_def.name,
-        local_variables: emit_variables(&func_def.body),
-        instructions: {
-            let mut instructions = Vec::new();
-            emit_block(func_def.body, &mut instructions);
-            emit_return_if_needed(return_type, &mut instructions);
-            instructions
-        },
-        return_type,
+        Module {
+            functions,
+            external_functions,
+        }
     }
 }
 
@@ -56,7 +80,7 @@ fn emit_variables_in_block(
             BlockItem::Statement(statement) => {
                 emit_variables_in_statement(statement, variables, names)
             }
-            BlockItem::Declaration(declaration) => {
+            BlockItem::VariableDeclaration(declaration) => {
                 emit_variables_in_declaration(declaration, variables, names)
             }
         }
@@ -94,14 +118,14 @@ fn emit_variables_in_statement(
 }
 
 fn emit_variables_in_declaration(
-    declaration: &Declaration,
+    declaration: &VariableDeclaration,
     variables: &mut Vec<Variable>,
     names: &mut BTreeSet<String>,
 ) {
     if !names.contains(&declaration.name) {
         let variable = Variable {
             name: declaration.name.clone(),
-            r#type: emit_type(declaration.r#type),
+            r#type: declaration.r#type.into(),
         };
         variables.push(variable);
         names.insert(declaration.name.clone());
@@ -118,11 +142,16 @@ fn emit_block(block: Block, instructions: &mut Vec<Instruction>) {
 fn emit_block_item(block_item: BlockItem, instructions: &mut Vec<Instruction>) {
     match block_item {
         BlockItem::Statement(statement) => emit_statement(statement, instructions),
-        BlockItem::Declaration(declaration) => emit_declaration(declaration, instructions),
+        BlockItem::VariableDeclaration(declaration) => {
+            emit_variable_declaration(declaration, instructions)
+        }
     }
 }
 
-fn emit_declaration(declaration: Declaration, instructions: &mut Vec<Instruction>) {
+fn emit_variable_declaration(
+    declaration: VariableDeclaration,
+    instructions: &mut Vec<Instruction>,
+) {
     if let Some(init) = declaration.init {
         emit_expression(init, instructions);
         instructions.push(Instruction::LocalSet(declaration.name));
@@ -229,7 +258,7 @@ fn emit_loop_end(instructions: &mut Vec<Instruction>) {
 
 fn emit_for_init(for_init: ForInit, instructions: &mut Vec<Instruction>) {
     match for_init {
-        ForInit::Declaration(declaration) => emit_declaration(declaration, instructions),
+        ForInit::Declaration(declaration) => emit_variable_declaration(declaration, instructions),
         ForInit::Expression(expression) => emit_expression_as_statement(expression, instructions),
     }
 }
@@ -386,6 +415,12 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             emit_expression(*r#else, instructions);
             instructions.push(Instruction::End);
         }
+        Expression::FunctionCall(name, arguments) => {
+            arguments
+                .into_iter()
+                .for_each(|a| emit_expression(a, instructions));
+            instructions.push(Instruction::Call(name));
+        }
     }
 }
 
@@ -452,17 +487,28 @@ fn emit_variable_name(expression: Expression) -> String {
     }
 }
 
-fn emit_type(r#type: AstType) -> IrType {
-    match r#type {
-        AstType::Int => IrType::Int32,
-        AstType::Void => IrType::Void,
-    }
-}
-
 fn emit_label(identifier: &str, r#type: &str) -> String {
     let mut label = String::with_capacity(identifier.len() + r#type.len() + 1);
     label.push_str(identifier);
     label.push('.');
     label.push_str(r#type);
     label
+}
+
+impl From<AstType> for IrType {
+    fn from(value: AstType) -> Self {
+        match value {
+            AstType::Int => IrType::Int32,
+            AstType::Void => IrType::Void,
+        }
+    }
+}
+
+impl From<FunctionParameter> for Variable {
+    fn from(value: FunctionParameter) -> Self {
+        Self {
+            name: value.name,
+            r#type: value.r#type.into(),
+        }
+    }
 }

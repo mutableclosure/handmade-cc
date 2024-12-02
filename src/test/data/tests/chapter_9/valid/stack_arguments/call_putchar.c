@@ -1,4 +1,4 @@
-int putchar(int c);
+extern int putchar(int c);
 
 /* Make sure we can correctly manage calling conventions from the callee side
  * (by accessing parameters, including parameters on the stack) and the caller side

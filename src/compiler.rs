@@ -8,8 +8,8 @@ impl Compiler {
     pub fn compile(&mut self, source: impl AsRef<str>) -> Result<String, Error> {
         let mut parser = Parser::new(source.as_ref());
         let ast = parser.parse()?;
-        let module = Emitter.emit(ast)?;
-        let wat = Wat::default().generate(module)?;
+        let module = Emitter.emit(ast);
+        let wat = Wat::default().generate(module);
         Ok(wat)
     }
 }

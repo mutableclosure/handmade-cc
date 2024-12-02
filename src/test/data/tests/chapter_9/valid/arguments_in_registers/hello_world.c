@@ -1,4 +1,4 @@
-int putchar(int c);
+extern int putchar(int c);
 
 int main(void) {
     putchar(72);

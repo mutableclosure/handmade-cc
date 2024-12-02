@@ -25,6 +25,10 @@ impl<'a> Lexer<'a> {
         self.line_number
     }
 
+    pub fn clear_line_number(&mut self) {
+        self.line_number = 0;
+    }
+
     pub fn peek(&mut self) -> Result<Option<&Token>, Error> {
         if self.next.is_none() {
             self.next = self.advance()?;
@@ -131,6 +135,7 @@ impl Lexer<'_> {
                 '>' => return Ok(Some(Token::GreaterThanOp)),
                 '?' => return Ok(Some(Token::QuestionMark)),
                 ':' => return Ok(Some(Token::Colon)),
+                ',' => return Ok(Some(Token::Comma)),
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }
@@ -148,8 +153,10 @@ impl Lexer<'_> {
 
     fn ignore_multiline_comment(&mut self) {
         while let Some(c) = self.source.next() {
-            if c == '*' && self.source.next_if_eq(&'/').is_some() {
-                break;
+            match c {
+                '*' if self.source.next_if_eq(&'/').is_some() => break,
+                '\n' => self.line_number += 1,
+                _ => {}
             }
         }
     }
@@ -174,6 +181,7 @@ impl Lexer<'_> {
             "for" => Token::Keyword(Keyword::For),
             "break" => Token::Keyword(Keyword::Break),
             "continue" => Token::Keyword(Keyword::Continue),
+            "extern" => Token::Keyword(Keyword::Extern),
             _ => Token::Identifier(identifier),
         }
     }

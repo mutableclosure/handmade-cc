@@ -18,6 +18,5 @@ mod error;
 mod ir;
 mod lexer;
 mod parser;
-mod symbol;
 mod token;
 mod wat;

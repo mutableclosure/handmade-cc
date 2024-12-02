@@ -2,14 +2,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Program {
-    pub main: FunctionDefinition,
-}
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct FunctionDefinition {
-    pub name: String,
-    pub return_type: Type,
-    pub body: Block,
+    pub functions: Vec<FunctionDeclaration>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -34,7 +27,7 @@ pub enum Statement {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum ForInit {
-    Declaration(Declaration),
+    Declaration(VariableDeclaration),
     Expression(Expression),
 }
 
@@ -46,11 +39,31 @@ pub struct Block {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum BlockItem {
     Statement(Statement),
-    Declaration(Declaration),
+    VariableDeclaration(VariableDeclaration),
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Declaration {
+pub struct FunctionDeclaration {
+    pub name: String,
+    pub parameters: Vec<FunctionParameter>,
+    pub return_type: Type,
+    pub body: FunctionBody,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum FunctionBody {
+    Extern,
+    Block(Block),
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct FunctionParameter {
+    pub name: String,
+    pub r#type: Type,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct VariableDeclaration {
     pub name: String,
     pub r#type: Type,
     pub init: Option<Expression>,
@@ -69,6 +82,7 @@ pub enum Expression {
     PostfixDecrement(Box<Expression>),
     BinaryOp(BinaryOp, Box<Expression>, Box<Expression>),
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
+    FunctionCall(String, Vec<Expression>),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]

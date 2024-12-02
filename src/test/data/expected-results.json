@@ -806,9 +806,6 @@
   "chapter_9/valid/stack_arguments/lots_of_arguments.c": {
     "return_code": 1
   },
-  "chapter_9/valid/stack_arguments/stack_alignment.c": {
-    "return_code": 3
-  },
   "chapter_9/valid/stack_arguments/test_for_memory_leaks.c": {
     "return_code": 1
   },

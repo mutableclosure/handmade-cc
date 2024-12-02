@@ -2,6 +2,7 @@ use alloc::{string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Module {
+    pub external_functions: Vec<ExternalFunction>,
     pub functions: Vec<Function>,
 }
 
@@ -9,8 +10,16 @@ pub struct Module {
 pub struct Function {
     pub name: String,
     pub return_type: Type,
+    pub parameters: Vec<Variable>,
     pub local_variables: Vec<Variable>,
     pub instructions: Vec<Instruction>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct ExternalFunction {
+    pub name: String,
+    pub return_type: Type,
+    pub parameters: Vec<Variable>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -52,6 +61,7 @@ pub enum Instruction {
     Block(String),
     Branch(String),
     BranchIf(String),
+    Call(String),
     End,
     Nop,
 }

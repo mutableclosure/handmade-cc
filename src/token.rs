@@ -46,6 +46,7 @@ pub enum Token {
     TwoHyphens,
     QuestionMark,
     Colon,
+    Comma,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -60,6 +61,7 @@ pub enum Keyword {
     For,
     Break,
     Continue,
+    Extern,
 }
 
 impl Display for Token {
@@ -108,6 +110,7 @@ impl Display for Token {
             Token::TwoHyphens => write!(f, "--"),
             Token::QuestionMark => write!(f, "?"),
             Token::Colon => write!(f, ":"),
+            Token::Comma => write!(f, ","),
         }
     }
 }
@@ -125,6 +128,7 @@ impl Display for Keyword {
             Keyword::For => write!(f, "for"),
             Keyword::Break => write!(f, "break"),
             Keyword::Continue => write!(f, "continue"),
+            Keyword::Extern => write!(f, "extern"),
         }
     }
 }

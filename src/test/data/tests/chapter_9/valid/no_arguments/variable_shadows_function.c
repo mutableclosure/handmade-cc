@@ -1,6 +1,6 @@
-int main(void) {
-    int foo(void);
+int foo(void);
 
+int main(void) {
     int x = foo();
     if (x > 0) {
         int foo  = 3;

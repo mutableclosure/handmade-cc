@@ -1,9 +1,11 @@
 use handmade_cc::Compiler;
-use wasmi::{Engine, Linker, Memory, MemoryType, Module, Store};
+use wasmi::{Caller, Engine, Func, Linker, Memory, MemoryType, Module, Store};
 
 const MEMORY_PAGES: u32 = 1;
-const MEMORY_MODULE: &str = "env";
+const ENV_MODULE: &str = "env";
 const MEMORY_NAME: &str = "memory";
+const MAIN_NAME: &str = "main";
+const PUT_CHAR_NAME: &str = "putchar";
 
 #[cfg(feature = "std")]
 static INIT: std::sync::Once = std::sync::Once::new();
@@ -33,14 +35,22 @@ fn build_and_run(source_code: &str) -> Result<i32, String> {
     let memory_type = MemoryType::new(MEMORY_PAGES, Some(MEMORY_PAGES)).unwrap();
     let memory = Memory::new(&mut store, memory_type).unwrap();
     let mut linker = <Linker<()>>::new(&engine);
-    linker.define(MEMORY_MODULE, MEMORY_NAME, memory).unwrap();
+    linker.define(ENV_MODULE, MEMORY_NAME, memory).unwrap();
+    linker
+        .define(ENV_MODULE, PUT_CHAR_NAME, Func::wrap(&mut store, putchar))
+        .unwrap();
     let instance = linker
         .instantiate(&mut store, &module)
         .map_err(|error| error.to_string())?
         .start(&mut store)
         .map_err(|error| error.to_string())?;
     let main = instance
-        .get_typed_func::<(), i32>(&store, "main")
+        .get_typed_func::<(), i32>(&store, MAIN_NAME)
         .map_err(|error| error.to_string())?;
     main.call(&mut store, ()).map_err(|error| error.to_string())
+}
+
+fn putchar(_: Caller<'_, ()>, c: i32) -> i32 {
+    println!("{c}");
+    c
 }
