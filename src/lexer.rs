@@ -178,7 +178,7 @@ impl Lexer<'_> {
             "break" => Token::Keyword(Keyword::Break),
             "continue" => Token::Keyword(Keyword::Continue),
             "extern" => Token::Keyword(Keyword::Extern),
-            _ => Token::Identifier(identifier),
+            _ => Token::Identifier(identifier.into()),
         }
     }
 

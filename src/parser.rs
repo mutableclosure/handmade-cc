@@ -9,11 +9,7 @@ use crate::{
     verifier::Verifier,
     Error, ErrorKind, Severity,
 };
-use alloc::{
-    boxed::Box,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
@@ -191,7 +187,6 @@ impl Parser<'_> {
                 let label = self
                     .environment
                     .loop_label()
-                    .map(|l| l.to_string())
                     .ok_or_else(|| self.err(ErrorKind::BreakOutsideLoopOrSwitch))?;
                 self.expect_token(Token::Semicolon)?;
                 Ok(Statement::Break(label))
@@ -201,7 +196,6 @@ impl Parser<'_> {
                 let label = self
                     .environment
                     .loop_label()
-                    .map(|l| l.to_string())
                     .ok_or_else(|| self.err(ErrorKind::ContinueOutsideLoop))?;
                 self.expect_token(Token::Semicolon)?;
                 Ok(Statement::Continue(label))
@@ -271,8 +265,8 @@ impl Parser<'_> {
         })
     }
 
-    fn loop_body(&mut self) -> Result<(String, Box<Statement>), Error> {
-        let label = self.environment.enter_loop().to_string();
+    fn loop_body(&mut self) -> Result<(Rc<String>, Box<Statement>), Error> {
+        let label = self.environment.enter_loop();
         let body = self.statement()?.into();
         self.environment.exit_loop();
         Ok((label, body))
@@ -309,7 +303,7 @@ impl Parser<'_> {
         let identifier = self.expect_identifier()?;
         let name = self
             .environment
-            .declare_variable(&identifier)
+            .declare_variable(identifier)
             .map_err(|kind| self.err(kind))?;
 
         let init = if self.peek_token(Token::EqualSign)? {
@@ -369,8 +363,7 @@ impl Parser<'_> {
             Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoPlusSigns)? => {
                 self.lexer.next()?;
                 self.environment
-                    .resolve_lvalue(&identifier)
-                    .map(|v| v.to_string())
+                    .resolve_lvalue(identifier)
                     .map(Expression::Variable)
                     .map_err(|kind| self.err(kind))
                     .map(Box::new)
@@ -379,14 +372,13 @@ impl Parser<'_> {
             Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoHyphens)? => {
                 self.lexer.next()?;
                 self.environment
-                    .resolve_lvalue(&identifier)
-                    .map(|v| v.to_string())
+                    .resolve_lvalue(identifier)
                     .map(Expression::Variable)
                     .map_err(|kind| self.err(kind))
                     .map(Box::new)
                     .map(Expression::PostfixDecrement)
             }
-            Some(Token::Identifier(identifier)) => self.symbol(&identifier),
+            Some(Token::Identifier(identifier)) => self.symbol(identifier),
             Some(Token::TwoPlusSigns) => {
                 let variable = self.factor()?;
                 self.expect_lvalue(&variable)?;
@@ -423,16 +415,15 @@ impl Parser<'_> {
         }
     }
 
-    fn symbol(&mut self, identifier: &str) -> Result<Expression, Error> {
+    fn symbol(&mut self, identifier: Rc<String>) -> Result<Expression, Error> {
         let (name, symbol) = self
             .environment
             .resolve_symbol(identifier)
             .map_err(|kind| self.err(kind))?;
 
         match symbol {
-            Symbol::Variable => Ok(Expression::Variable(name.to_string())),
+            Symbol::Variable => Ok(Expression::Variable(name)),
             Symbol::Function(function) => {
-                let name = name.to_string();
                 let parameters = function.parameters.values().copied().collect::<Vec<_>>();
                 assert!(matches!(function.return_type, Type::Int));
                 self.expect_token(Token::OpenParenthesis)?;
@@ -456,7 +447,7 @@ impl Parser<'_> {
         }
     }
 
-    fn expect_identifier(&mut self) -> Result<String, Error> {
+    fn expect_identifier(&mut self) -> Result<Rc<String>, Error> {
         self.lexer.next()?.map_or_else(
             || Err(self.err(ErrorKind::ExpectedIdentifier(None))),
             |token| match token {

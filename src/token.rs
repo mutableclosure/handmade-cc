@@ -1,9 +1,9 @@
-use alloc::string::String;
+use alloc::{rc::Rc, string::String};
 use core::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Token {
-    Identifier(String),
+    Identifier(Rc<String>),
     Constant(i32),
     Keyword(Keyword),
     OpenParenthesis,

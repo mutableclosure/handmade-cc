@@ -19,8 +19,13 @@ impl<'a> Verifier<'a> {
     }
 
     pub fn verify_functions(&self, functions: &[FunctionDeclaration]) -> Result<(), Error> {
-        if !functions.iter().any(|f| f.name == MAIN_FUNCTION_NAME) {
-            return Err(self.err(ErrorKind::UndefinedFunction(MAIN_FUNCTION_NAME.to_string())));
+        if !functions
+            .iter()
+            .any(|f| f.name.as_str() == MAIN_FUNCTION_NAME)
+        {
+            return Err(self.err(ErrorKind::UndefinedFunction(
+                MAIN_FUNCTION_NAME.to_string().into(),
+            )));
         }
 
         self.verify_calls(functions)
@@ -97,7 +102,7 @@ impl Verifier<'_> {
 
     fn verify_calls_in_expression(&self, expression: &Expression) -> Result<(), Error> {
         if let Expression::FunctionCall(name, _) = expression {
-            if !self.environment.is_function_defined(name) {
+            if !self.environment.is_function_defined(name.clone()) {
                 return Err(self.err(ErrorKind::UndefinedFunction(name.clone())));
             }
         }

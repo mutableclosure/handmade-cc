@@ -1,5 +1,5 @@
 use crate::token::Token;
-use alloc::string::String;
+use alloc::{rc::Rc, string::String};
 use core::fmt::{self, Display, Formatter, Result};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -11,13 +11,13 @@ pub enum Kind {
     ExpectedIdentifier(Option<Token>),
     ExpectedToken(Token, Option<Token>),
     ExpectedExpression(Option<Token>),
-    Redefined(String),
-    Undeclared(String),
-    ConflictingTypes(String),
+    Redefined(Rc<String>),
+    Undeclared(Rc<String>),
+    ConflictingTypes(Rc<String>),
     InvalidLvalue,
     BreakOutsideLoopOrSwitch,
     ContinueOutsideLoop,
-    UndefinedFunction(String),
+    UndefinedFunction(Rc<String>),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]

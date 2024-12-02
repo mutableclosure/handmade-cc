@@ -5,7 +5,7 @@ use crate::{
     },
     ir::{ExternalFunction, Function, Instruction, Module, Type as IrType, Variable},
 };
-use alloc::{collections::btree_set::BTreeSet, string::String, vec::Vec};
+use alloc::{collections::btree_set::BTreeSet, rc::Rc, string::String, vec::Vec};
 
 const BREAK_LABEL: &str = "break";
 const CONTINUE_LABEL: &str = "continue";
@@ -73,7 +73,7 @@ fn emit_variables(block: &Block) -> Vec<Variable> {
 fn emit_variables_in_block(
     block: &Block,
     variables: &mut Vec<Variable>,
-    names: &mut BTreeSet<String>,
+    names: &mut BTreeSet<Rc<String>>,
 ) {
     for item in &block.items {
         match item {
@@ -90,7 +90,7 @@ fn emit_variables_in_block(
 fn emit_variables_in_statement(
     statement: &Statement,
     variables: &mut Vec<Variable>,
-    names: &mut BTreeSet<String>,
+    names: &mut BTreeSet<Rc<String>>,
 ) {
     match statement {
         Statement::If(_, then, r#else) => {
@@ -120,7 +120,7 @@ fn emit_variables_in_statement(
 fn emit_variables_in_declaration(
     declaration: &VariableDeclaration,
     variables: &mut Vec<Variable>,
-    names: &mut BTreeSet<String>,
+    names: &mut BTreeSet<Rc<String>>,
 ) {
     if !names.contains(&declaration.name) {
         let variable = Variable {
@@ -243,7 +243,7 @@ fn emit_loop_start(
     label: &str,
     continue_label: &str,
     instructions: &mut Vec<Instruction>,
-) -> (String, String) {
+) -> (Rc<String>, Rc<String>) {
     let continue_label = emit_label(label, continue_label);
     let break_label = emit_label(label, BREAK_LABEL);
     instructions.push(Instruction::Loop(continue_label.clone()));
@@ -480,19 +480,19 @@ fn emit_return_if_needed(return_type: IrType, instructions: &mut Vec<Instruction
     }
 }
 
-fn emit_variable_name(expression: Expression) -> String {
+fn emit_variable_name(expression: Expression) -> Rc<String> {
     match expression {
         Expression::Variable(name) => name,
         _ => unreachable!(),
     }
 }
 
-fn emit_label(identifier: &str, r#type: &str) -> String {
+fn emit_label(identifier: &str, r#type: &str) -> Rc<String> {
     let mut label = String::with_capacity(identifier.len() + r#type.len() + 1);
     label.push_str(identifier);
     label.push('.');
     label.push_str(r#type);
-    label
+    label.into()
 }
 
 impl From<AstType> for IrType {

@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{rc::Rc, string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Module {
@@ -8,7 +8,7 @@ pub struct Module {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Function {
-    pub name: String,
+    pub name: Rc<String>,
     pub return_type: Type,
     pub parameters: Vec<Variable>,
     pub local_variables: Vec<Variable>,
@@ -17,14 +17,14 @@ pub struct Function {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct ExternalFunction {
-    pub name: String,
+    pub name: Rc<String>,
     pub return_type: Type,
     pub parameters: Vec<Variable>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Variable {
-    pub name: String,
+    pub name: Rc<String>,
     pub r#type: Type,
 }
 
@@ -53,15 +53,15 @@ pub enum Instruction {
     Else,
     Select,
     Return,
-    LocalGet(String),
-    LocalSet(String),
-    LocalTee(String),
+    LocalGet(Rc<String>),
+    LocalSet(Rc<String>),
+    LocalTee(Rc<String>),
     Drop,
-    Loop(String),
-    Block(String),
-    Branch(String),
-    BranchIf(String),
-    Call(String),
+    Loop(Rc<String>),
+    Block(Rc<String>),
+    Branch(Rc<String>),
+    BranchIf(Rc<String>),
+    Call(Rc<String>),
     End,
     Nop,
 }

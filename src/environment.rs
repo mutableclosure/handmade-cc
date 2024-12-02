@@ -3,8 +3,8 @@ use crate::{
     ErrorKind,
 };
 use alloc::{
-    borrow::Cow,
     collections::{btree_map::Entry, BTreeMap},
+    rc::Rc,
     string::{String, ToString},
     vec::Vec,
 };
@@ -19,7 +19,7 @@ pub enum Symbol {
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub parameters: BTreeMap<String, Type>,
+    pub parameters: BTreeMap<Rc<String>, Type>,
     pub return_type: Type,
     pub declaration_type: FunctionDeclarationType,
 }
@@ -33,9 +33,9 @@ pub enum FunctionDeclarationType {
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    symbols: Vec<BTreeMap<String, Symbol>>,
-    function: Option<String>,
-    loop_labels: Vec<String>,
+    symbols: Vec<BTreeMap<Rc<String>, Symbol>>,
+    function: Option<Rc<String>>,
+    loop_labels: Vec<Rc<String>>,
 }
 
 impl Default for Environment {
@@ -59,8 +59,8 @@ impl Environment {
         self.symbols.pop();
     }
 
-    pub fn enter_function(&mut self, name: String) {
-        assert!(self.resolve_function(&name).is_some());
+    pub fn enter_function(&mut self, name: Rc<String>) {
+        assert!(self.resolve_function(name.clone()).is_some());
         self.function = Some(name);
     }
 
@@ -68,14 +68,14 @@ impl Environment {
         self.function = None;
     }
 
-    pub fn enter_loop(&mut self) -> &str {
+    pub fn enter_loop(&mut self) -> Rc<String> {
         let label = make_name(LOOP_LABEL, self.loop_labels.len());
         self.loop_labels.push(label);
-        self.loop_labels.last().unwrap()
+        self.loop_labels.last().unwrap().clone()
     }
 
-    pub fn loop_label(&self) -> Option<&str> {
-        self.loop_labels.last().map(|s| s.as_str())
+    pub fn loop_label(&self) -> Option<Rc<String>> {
+        self.loop_labels.last().cloned()
     }
 
     pub fn exit_loop(&mut self) {
@@ -84,7 +84,7 @@ impl Environment {
 
     pub fn declare_function(
         &mut self,
-        name: String,
+        name: Rc<String>,
         parameters: Vec<FunctionParameter>,
         return_type: Type,
         declaration_type: FunctionDeclarationType,
@@ -112,7 +112,7 @@ impl Environment {
                                     .map(|p| &p.r#type)
                                     .eq(function.parameters.values())
                             {
-                                return Err(ErrorKind::ConflictingTypes(entry.key().to_string()));
+                                return Err(ErrorKind::ConflictingTypes(entry.key().clone()));
                             }
 
                             if declaration_type == FunctionDeclarationType::Definition {
@@ -129,23 +129,23 @@ impl Environment {
                     }
                 }
 
-                Err(ErrorKind::Redefined(entry.key().to_string()))
+                Err(ErrorKind::Redefined(entry.key().clone()))
             }
         }
     }
 
-    pub fn declare_variable(&mut self, identifier: &str) -> Result<String, ErrorKind> {
+    pub fn declare_variable(&mut self, identifier: Rc<String>) -> Result<Rc<String>, ErrorKind> {
         if let Some(f) = self
             .function
             .as_ref()
-            .and_then(|f| self.resolve_function(f))
+            .and_then(|f| self.resolve_function(f.clone()))
         {
-            if f.parameters.contains_key(identifier) {
-                return Err(ErrorKind::Redefined(identifier.to_string()));
+            if f.parameters.contains_key(&identifier) {
+                return Err(ErrorKind::Redefined(identifier));
             }
         }
 
-        let name = make_name(identifier, self.symbols.len());
+        let name = make_name(&identifier, self.symbols.len());
         let symbols = self.symbols.last_mut().unwrap();
 
         if symbols.contains_key(&name) {
@@ -156,7 +156,7 @@ impl Environment {
         }
     }
 
-    pub fn resolve_lvalue<'a>(&'a self, identifier: &'a str) -> Result<Cow<'a, str>, ErrorKind> {
+    pub fn resolve_lvalue(&self, identifier: Rc<String>) -> Result<Rc<String>, ErrorKind> {
         let (name, symbol) = self.resolve_symbol(identifier)?;
 
         if matches!(symbol, Symbol::Variable) {
@@ -166,7 +166,7 @@ impl Environment {
         }
     }
 
-    pub fn is_function_defined(&self, identifier: &str) -> bool {
+    pub fn is_function_defined(&self, identifier: Rc<String>) -> bool {
         self.resolve_function(identifier)
             .map(|f| match f.declaration_type {
                 FunctionDeclarationType::ExternDeclaration
@@ -176,34 +176,34 @@ impl Environment {
             .unwrap_or_default()
     }
 
-    pub fn resolve_symbol<'a>(
-        &'a self,
-        identifier: &'a str,
-    ) -> Result<(Cow<'a, str>, &Symbol), ErrorKind> {
+    pub fn resolve_symbol(
+        &self,
+        identifier: Rc<String>,
+    ) -> Result<(Rc<String>, &Symbol), ErrorKind> {
         for (level, symbols) in self.symbols.iter().enumerate().rev() {
             if let Some(Symbol::Function(f)) = self.function.as_ref().and_then(|f| symbols.get(f)) {
-                if let Some(r#type) = f.parameters.get(identifier) {
+                if let Some(r#type) = f.parameters.get(&identifier) {
                     assert!(matches!(r#type, Type::Int));
-                    return Ok((identifier.into(), &Symbol::Variable));
+                    return Ok((identifier, &Symbol::Variable));
                 }
             }
 
-            if let Some(symbol) = symbols.get(identifier) {
-                return Ok((identifier.into(), symbol));
+            if let Some(symbol) = symbols.get(&identifier) {
+                return Ok((identifier, symbol));
             }
 
-            let name = make_name(identifier, level + 1);
+            let name = make_name(&identifier, level + 1);
             if let Some(symbol) = symbols.get(&name) {
-                return Ok((name.into(), symbol));
+                return Ok((name, symbol));
             }
         }
 
-        Err(ErrorKind::Undeclared(identifier.to_string()))
+        Err(ErrorKind::Undeclared(identifier.clone()))
     }
 }
 
 impl Environment {
-    fn resolve_function<'a>(&'a self, name: &'a str) -> Option<&'a Function> {
+    fn resolve_function(&self, name: Rc<String>) -> Option<&Function> {
         if let Ok((_, Symbol::Function(function))) = self.resolve_symbol(name) {
             Some(function)
         } else {
@@ -212,10 +212,10 @@ impl Environment {
     }
 }
 
-fn make_name(identifier: &str, level: usize) -> String {
+fn make_name(identifier: &str, level: usize) -> Rc<String> {
     let mut name = String::with_capacity(identifier.len() + 4);
     name.push_str(identifier);
     name.push('.');
     name.push_str(&level.to_string());
-    name
+    name.into()
 }

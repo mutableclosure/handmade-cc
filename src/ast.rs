@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Program {
@@ -11,12 +11,12 @@ pub enum Statement {
     Expression(Expression),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
     Compound(Block),
-    Break(String),
-    Continue(String),
-    While(String, Expression, Box<Statement>),
-    DoWhile(String, Box<Statement>, Expression),
+    Break(Rc<String>),
+    Continue(Rc<String>),
+    While(Rc<String>, Expression, Box<Statement>),
+    DoWhile(Rc<String>, Box<Statement>, Expression),
     For(
-        String,
+        Rc<String>,
         Option<ForInit>,
         Option<Expression>,
         Option<Expression>,
@@ -44,7 +44,7 @@ pub enum BlockItem {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct FunctionDeclaration {
-    pub name: String,
+    pub name: Rc<String>,
     pub parameters: Vec<FunctionParameter>,
     pub return_type: Type,
     pub body: FunctionBody,
@@ -58,13 +58,13 @@ pub enum FunctionBody {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct FunctionParameter {
-    pub name: String,
+    pub name: Rc<String>,
     pub r#type: Type,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct VariableDeclaration {
-    pub name: String,
+    pub name: Rc<String>,
     pub r#type: Type,
     pub init: Option<Expression>,
 }
@@ -72,7 +72,7 @@ pub struct VariableDeclaration {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Expression {
     Constant(i32),
-    Variable(String),
+    Variable(Rc<String>),
     BitwiseComplement(Box<Expression>),
     Negation(Box<Expression>),
     Not(Box<Expression>),
@@ -82,7 +82,7 @@ pub enum Expression {
     PostfixDecrement(Box<Expression>),
     BinaryOp(BinaryOp, Box<Expression>, Box<Expression>),
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
-    FunctionCall(String, Vec<Expression>),
+    FunctionCall(Rc<String>, Vec<Expression>),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
