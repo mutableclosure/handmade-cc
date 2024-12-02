@@ -6,6 +6,7 @@ use crate::{
     environment::{Environment, FunctionDeclarationType, Symbol},
     lexer::Lexer,
     token::{Keyword, Token},
+    verifier::Verifier,
     Error, ErrorKind, Severity,
 };
 use alloc::{
@@ -13,8 +14,6 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-
-const MAIN: &str = "main";
 
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
@@ -60,96 +59,13 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.lexer.clear_line_number();
-
-        if !functions.iter().any(|f| f.name == MAIN) {
-            return Err(self.err(ErrorKind::UndefinedFunction(MAIN.to_string())));
-        }
-
-        self.verify_calls(&functions)?;
+        Verifier::new(&self.environment).verify_functions(&functions)?;
 
         Ok(Program { functions })
     }
 }
 
 impl Parser<'_> {
-    fn verify_calls(&self, functions: &[FunctionDeclaration]) -> Result<(), Error> {
-        for function in functions {
-            match &function.body {
-                FunctionBody::Extern => {}
-                FunctionBody::Block(block) => self.verify_calls_in_block(block)?,
-            }
-        }
-
-        Ok(())
-    }
-
-    fn verify_calls_in_block(&self, block: &Block) -> Result<(), Error> {
-        for item in &block.items {
-            match item {
-                BlockItem::Statement(statement) => self.verify_calls_in_statement(statement)?,
-                BlockItem::VariableDeclaration(_) => {}
-            }
-        }
-
-        Ok(())
-    }
-
-    fn verify_calls_in_statement(&self, statement: &Statement) -> Result<(), Error> {
-        match statement {
-            Statement::Expression(expression) => self.verify_calls_in_expression(expression)?,
-            Statement::If(expression, statement, statement1) => {
-                self.verify_calls_in_expression(expression)?;
-                self.verify_calls_in_statement(statement)?;
-                if let Some(statement) = statement1 {
-                    self.verify_calls_in_statement(statement)?;
-                }
-            }
-            Statement::Compound(block) => self.verify_calls_in_block(block)?,
-            Statement::While(_, expression, statement) => {
-                self.verify_calls_in_expression(expression)?;
-                self.verify_calls_in_statement(statement)?;
-            }
-            Statement::DoWhile(_, statement, expression) => {
-                self.verify_calls_in_statement(statement)?;
-                self.verify_calls_in_expression(expression)?;
-            }
-            Statement::For(_, for_init, expression, expression1, statement) => {
-                if let Some(for_init) = for_init {
-                    match for_init {
-                        ForInit::Declaration(_) => {}
-                        ForInit::Expression(expression) => {
-                            self.verify_calls_in_expression(expression)?
-                        }
-                    }
-                }
-                if let Some(expression) = expression {
-                    self.verify_calls_in_expression(expression)?;
-                }
-                if let Some(expression) = expression1 {
-                    self.verify_calls_in_expression(expression)?;
-                }
-                self.verify_calls_in_statement(statement)?;
-            }
-            Statement::Return(_)
-            | Statement::Break(_)
-            | Statement::Continue(_)
-            | Statement::Null => {}
-        }
-
-        Ok(())
-    }
-
-    fn verify_calls_in_expression(&self, expression: &Expression) -> Result<(), Error> {
-        if let Expression::FunctionCall(name, _) = expression {
-            if !self.environment.is_function_defined(name) {
-                return Err(self.err(ErrorKind::UndefinedFunction(name.clone())));
-            }
-        }
-
-        Ok(())
-    }
-
     fn extern_declaration(&mut self) -> Result<Option<FunctionDeclaration>, Error> {
         let token = self.lexer.next()?;
 

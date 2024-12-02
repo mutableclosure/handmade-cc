@@ -25,10 +25,6 @@ impl<'a> Lexer<'a> {
         self.line_number
     }
 
-    pub fn clear_line_number(&mut self) {
-        self.line_number = 0;
-    }
-
     pub fn peek(&mut self) -> Result<Option<&Token>, Error> {
         if self.next.is_none() {
             self.next = self.advance()?;

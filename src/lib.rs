@@ -19,4 +19,5 @@ mod ir;
 mod lexer;
 mod parser;
 mod token;
+mod verifier;
 mod wat;
