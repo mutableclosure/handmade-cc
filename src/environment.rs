@@ -92,14 +92,11 @@ impl Environment {
         let symbols = self.symbols.last_mut().unwrap();
         match symbols.entry(name) {
             Entry::Vacant(entry) => {
-                let parameters =
-                    BTreeMap::from_iter(parameters.into_iter().map(|p| (p.name, p.r#type)));
-                let function = Function {
-                    parameters,
+                entry.insert(Symbol::Function(Function {
+                    parameters: to_parameters(parameters),
                     return_type,
                     declaration_type,
-                };
-                entry.insert(Symbol::Function(function));
+                }));
                 Ok(())
             }
             Entry::Occupied(mut entry) => {
@@ -107,19 +104,14 @@ impl Environment {
                     match function.declaration_type {
                         FunctionDeclarationType::ForwardDeclaration => {
                             if return_type != function.return_type
-                                || !parameters
-                                    .iter()
-                                    .map(|p| &p.r#type)
-                                    .eq(function.parameters.values())
+                                || !parameters_match(&parameters, &function.parameters)
                             {
                                 return Err(ErrorKind::ConflictingTypes(entry.key().clone()));
                             }
 
                             if declaration_type == FunctionDeclarationType::Definition {
                                 function.declaration_type = declaration_type;
-                                function.parameters = BTreeMap::from_iter(
-                                    parameters.into_iter().map(|p| (p.name, p.r#type)),
-                                );
+                                function.parameters = to_parameters(parameters);
                             }
 
                             return Ok(());
@@ -218,4 +210,12 @@ fn make_name(identifier: &str, level: usize) -> Rc<String> {
     name.push('.');
     name.push_str(&level.to_string());
     name.into()
+}
+
+fn to_parameters(parameters: Vec<FunctionParameter>) -> BTreeMap<Rc<String>, Type> {
+    BTreeMap::from_iter(parameters.into_iter().map(|p| (p.name, p.r#type)))
+}
+
+fn parameters_match(found: &[FunctionParameter], expected: &BTreeMap<Rc<String>, Type>) -> bool {
+    found.iter().map(|p| &p.r#type).eq(expected.values())
 }
