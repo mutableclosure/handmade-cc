@@ -1,9 +1,9 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Expression, ForInit, FunctionBody, FunctionParameter, Program,
-        Statement, Type as AstType, VariableDeclaration,
+        BinaryOp, Block, BlockItem, Expression, ForInit, FunctionBody, FunctionParameter, Lvalue,
+        Program, Statement, Type as AstType, VariableDeclaration,
     },
-    ir::{ExternalFunction, Function, Instruction, Module, Type as IrType, Variable},
+    ir::{ExternalFunction, Function, Global, Instruction, Module, Type as IrType, Variable},
 };
 use alloc::{collections::btree_set::BTreeSet, rc::Rc, string::String, vec::Vec};
 
@@ -16,6 +16,16 @@ pub struct Emitter;
 
 impl Emitter {
     pub fn emit(&self, program: Program) -> Module {
+        let globals = program
+            .globals
+            .into_iter()
+            .map(|g| Global {
+                name: g.name,
+                r#type: g.r#type.into(),
+                value: g.init,
+            })
+            .collect();
+
         let mut functions = Vec::new();
         let mut external_functions = Vec::new();
 
@@ -57,6 +67,7 @@ impl Emitter {
         }
 
         Module {
+            globals,
             functions,
             external_functions,
         }
@@ -271,6 +282,7 @@ fn emit_expression_as_statement(expression: Expression, instructions: &mut Vec<I
 fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) {
     match expression {
         Expression::Constant(value) => instructions.push(Instruction::PushConstant(value)),
+        Expression::Global(name) => instructions.push(Instruction::GlobalGet(name)),
         Expression::Variable(name) => instructions.push(Instruction::LocalGet(name)),
         Expression::BitwiseComplement(expression) => {
             emit_expression(*expression, instructions);
@@ -373,9 +385,8 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             emit_op(*left, *right, Instruction::Ge, instructions);
         }
         Expression::BinaryOp(BinaryOp::Assignment, left, right) => {
-            let name = emit_variable_name(*left);
             emit_expression(*right, instructions);
-            instructions.push(Instruction::LocalTee(name));
+            emit_lvalue_tee((*left).into(), instructions);
         }
         Expression::BinaryOp(BinaryOp::AddAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Add, instructions);
@@ -425,20 +436,20 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
 }
 
 fn emit_prefix_op(expression: Expression, op: Instruction, instructions: &mut Vec<Instruction>) {
-    let name = emit_variable_name(expression);
-    instructions.push(Instruction::LocalGet(name.clone()));
+    let lvalue: Lvalue = expression.into();
+    emit_lvalue_get(lvalue.clone(), instructions);
     instructions.push(Instruction::PushConstant(1));
     instructions.push(op);
-    instructions.push(Instruction::LocalTee(name));
+    emit_lvalue_tee(lvalue, instructions);
 }
 
 fn emit_postfix_op(expression: Expression, op: Instruction, instructions: &mut Vec<Instruction>) {
-    let name = emit_variable_name(expression);
-    instructions.push(Instruction::LocalGet(name.clone()));
-    instructions.push(Instruction::LocalGet(name.clone()));
+    let lvalue: Lvalue = expression.into();
+    emit_lvalue_get(lvalue.clone(), instructions);
+    emit_lvalue_get(lvalue.clone(), instructions);
     instructions.push(Instruction::PushConstant(1));
     instructions.push(op);
-    instructions.push(Instruction::LocalSet(name));
+    emit_lvalue_set(lvalue.clone(), instructions);
 }
 
 fn emit_op(
@@ -458,11 +469,11 @@ fn emit_assignment_op(
     op: Instruction,
     instructions: &mut Vec<Instruction>,
 ) {
-    let name = emit_variable_name(left);
-    instructions.push(Instruction::LocalGet(name.clone()));
+    let lvalue: Lvalue = left.into();
+    emit_lvalue_get(lvalue.clone(), instructions);
     emit_expression(right, instructions);
     instructions.push(op);
-    instructions.push(Instruction::LocalTee(name));
+    emit_lvalue_tee(lvalue, instructions);
 }
 
 fn emit_return_if_needed(return_type: IrType, instructions: &mut Vec<Instruction>) {
@@ -480,10 +491,27 @@ fn emit_return_if_needed(return_type: IrType, instructions: &mut Vec<Instruction
     }
 }
 
-fn emit_variable_name(expression: Expression) -> Rc<String> {
-    match expression {
-        Expression::Variable(name) => name,
-        _ => unreachable!(),
+fn emit_lvalue_get(lvalue: Lvalue, instructions: &mut Vec<Instruction>) {
+    match lvalue {
+        Lvalue::Global(name) => instructions.push(Instruction::GlobalGet(name)),
+        Lvalue::Variable(name) => instructions.push(Instruction::LocalGet(name)),
+    }
+}
+
+fn emit_lvalue_set(lvalue: Lvalue, instructions: &mut Vec<Instruction>) {
+    match lvalue {
+        Lvalue::Global(name) => instructions.push(Instruction::GlobalSet(name.clone())),
+        Lvalue::Variable(name) => instructions.push(Instruction::LocalSet(name)),
+    }
+}
+
+fn emit_lvalue_tee(lvalue: Lvalue, instructions: &mut Vec<Instruction>) {
+    match lvalue {
+        Lvalue::Global(name) => {
+            instructions.push(Instruction::GlobalSet(name.clone()));
+            instructions.push(Instruction::GlobalGet(name));
+        }
+        Lvalue::Variable(name) => instructions.push(Instruction::LocalTee(name)),
     }
 }
 
@@ -493,6 +521,16 @@ fn emit_label(identifier: &str, r#type: &str) -> Rc<String> {
     label.push('.');
     label.push_str(r#type);
     label.into()
+}
+
+impl From<Expression> for Lvalue {
+    fn from(value: Expression) -> Self {
+        match value {
+            Expression::Global(name) => Lvalue::Global(name),
+            Expression::Variable(name) => Lvalue::Variable(name),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl From<AstType> for IrType {

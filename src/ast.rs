@@ -2,7 +2,42 @@ use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Program {
+    pub globals: Vec<GlobalDeclaration>,
     pub functions: Vec<FunctionDeclaration>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct GlobalDeclaration {
+    pub name: Rc<String>,
+    pub r#type: Type,
+    pub init: Option<i32>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct FunctionDeclaration {
+    pub name: Rc<String>,
+    pub parameters: Vec<FunctionParameter>,
+    pub return_type: Type,
+    pub body: FunctionBody,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum FunctionBody {
+    Extern,
+    Block(Block),
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct FunctionParameter {
+    pub name: Rc<String>,
+    pub r#type: Type,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct VariableDeclaration {
+    pub name: Rc<String>,
+    pub r#type: Type,
+    pub init: Option<Expression>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -43,35 +78,9 @@ pub enum BlockItem {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct FunctionDeclaration {
-    pub name: Rc<String>,
-    pub parameters: Vec<FunctionParameter>,
-    pub return_type: Type,
-    pub body: FunctionBody,
-}
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub enum FunctionBody {
-    Extern,
-    Block(Block),
-}
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct FunctionParameter {
-    pub name: Rc<String>,
-    pub r#type: Type,
-}
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct VariableDeclaration {
-    pub name: Rc<String>,
-    pub r#type: Type,
-    pub init: Option<Expression>,
-}
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Expression {
     Constant(i32),
+    Global(Rc<String>),
     Variable(Rc<String>),
     BitwiseComplement(Box<Expression>),
     Negation(Box<Expression>),
@@ -83,6 +92,12 @@ pub enum Expression {
     BinaryOp(BinaryOp, Box<Expression>, Box<Expression>),
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
     FunctionCall(Rc<String>, Vec<Expression>),
+}
+
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub enum Lvalue {
+    Global(Rc<String>),
+    Variable(Rc<String>),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]

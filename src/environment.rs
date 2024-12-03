@@ -1,5 +1,5 @@
 use crate::{
-    ast::{FunctionParameter, Type},
+    ast::{FunctionParameter, Lvalue, Type},
     ErrorKind,
 };
 use alloc::{
@@ -13,8 +13,15 @@ const LOOP_LABEL: &str = "loop";
 
 #[derive(Clone, Debug)]
 pub enum Symbol {
+    Global(GlobalDeclarationType),
     Variable,
     Function(Function),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum GlobalDeclarationType {
+    Tentative,
+    NonTentative,
 }
 
 #[derive(Clone, Debug)]
@@ -126,6 +133,29 @@ impl Environment {
         }
     }
 
+    pub fn declare_global(
+        &mut self,
+        identifier: Rc<String>,
+        declaration_type: GlobalDeclarationType,
+    ) -> Result<Rc<String>, ErrorKind> {
+        let symbols = self.symbols.last_mut().unwrap();
+
+        match symbols.get(&identifier) {
+            Some(Symbol::Global(GlobalDeclarationType::Tentative)) | None => {
+                symbols.insert(identifier.clone(), Symbol::Global(declaration_type));
+                Ok(identifier)
+            }
+            Some(Symbol::Global(GlobalDeclarationType::NonTentative))
+                if matches!(declaration_type, GlobalDeclarationType::Tentative) =>
+            {
+                Ok(identifier)
+            }
+            Some(Symbol::Global(_)) | Some(Symbol::Variable) | Some(Symbol::Function(_)) => {
+                Err(ErrorKind::Redefined(identifier))
+            }
+        }
+    }
+
     pub fn declare_variable(&mut self, identifier: Rc<String>) -> Result<Rc<String>, ErrorKind> {
         if let Some(f) = self
             .function
@@ -148,13 +178,13 @@ impl Environment {
         }
     }
 
-    pub fn resolve_lvalue(&self, identifier: Rc<String>) -> Result<Rc<String>, ErrorKind> {
+    pub fn resolve_lvalue(&self, identifier: Rc<String>) -> Result<Lvalue, ErrorKind> {
         let (name, symbol) = self.resolve_symbol(identifier)?;
 
-        if matches!(symbol, Symbol::Variable) {
-            Ok(name)
-        } else {
-            Err(ErrorKind::InvalidLvalue)
+        match symbol {
+            Symbol::Global(_) => Ok(Lvalue::Global(name)),
+            Symbol::Variable => Ok(Lvalue::Variable(name)),
+            Symbol::Function(_) => Err(ErrorKind::InvalidLvalue),
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::ir::{ExternalFunction, Function, Instruction, Module, Type};
+use crate::ir::{ExternalFunction, Function, Global, Instruction, Module, Type};
 use alloc::string::{String, ToString};
 use core::mem;
 
@@ -22,18 +22,15 @@ impl Wat {
 "#,
         );
 
-        let last = module.external_functions.len().saturating_sub(1);
+        module.external_functions.into_iter().for_each(|function| {
+            self.generate_external_function(function);
+            self.out.push('\n');
+        });
 
-        module
-            .external_functions
-            .into_iter()
-            .enumerate()
-            .for_each(|(index, function)| {
-                self.generate_external_function(function);
-                if index < last {
-                    self.out.push('\n');
-                }
-            });
+        module.globals.into_iter().for_each(|global| {
+            self.generate_global(global);
+            self.out.push('\n');
+        });
 
         let last = module.functions.len().saturating_sub(1);
 
@@ -55,6 +52,23 @@ impl Wat {
 }
 
 impl Wat {
+    fn generate_global(&mut self, global: Global) {
+        self.out.push_str(r#"  (global $"#);
+        self.out.push_str(&global.name);
+
+        match global.r#type {
+            Type::Int32 => self.out.push_str(" (mut i32)"),
+            Type::Void => unreachable!(),
+        }
+
+        let value = global.value.unwrap_or_default();
+        self.out.push_str(" (i32.const ");
+        self.out.push_str(&value.to_string());
+        self.out.push(')');
+
+        self.out.push(')');
+    }
+
     fn generate_external_function(&mut self, function: ExternalFunction) {
         self.out.push_str(r#"  (import ""#);
         self.out.push_str(DEFAULT_EXTERNAL_MODULE);
@@ -70,7 +84,7 @@ impl Wat {
 
         self.generate_result(function.return_type);
 
-        self.out.push_str("))");
+        self.out.push_str("  ))");
     }
 
     fn generate_function(&mut self, function: Function) {
@@ -169,6 +183,16 @@ impl Wat {
             }
             Instruction::Select => self.out.push_str("select"),
             Instruction::Return => self.out.push_str("return"),
+            Instruction::GlobalGet(name) => {
+                self.out.push_str("(global.get $");
+                self.out.push_str(&name);
+                self.out.push(')');
+            }
+            Instruction::GlobalSet(name) => {
+                self.out.push_str("(global.set $");
+                self.out.push_str(&name);
+                self.out.push(')');
+            }
             Instruction::LocalGet(name) => {
                 self.out.push_str("(local.get $");
                 self.out.push_str(&name);

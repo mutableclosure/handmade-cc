@@ -15,6 +15,7 @@ mod compiler;
 mod emitter;
 mod environment;
 mod error;
+mod evaluator;
 mod ir;
 mod lexer;
 mod parser;

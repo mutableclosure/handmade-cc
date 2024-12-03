@@ -2,8 +2,16 @@ use alloc::{rc::Rc, string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Module {
+    pub globals: Vec<Global>,
     pub external_functions: Vec<ExternalFunction>,
     pub functions: Vec<Function>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Global {
+    pub name: Rc<String>,
+    pub r#type: Type,
+    pub value: Option<i32>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -53,6 +61,8 @@ pub enum Instruction {
     Else,
     Select,
     Return,
+    GlobalGet(Rc<String>),
+    GlobalSet(Rc<String>),
     LocalGet(Rc<String>),
     LocalSet(Rc<String>),
     LocalTee(Rc<String>),

@@ -18,6 +18,7 @@ pub enum Kind {
     BreakOutsideLoopOrSwitch,
     ContinueOutsideLoop,
     UndefinedFunction(Rc<String>),
+    NonConstantInit,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -81,6 +82,7 @@ impl Display for Kind {
             }
             Kind::ContinueOutsideLoop => write!(f, "'continue' statement not within a loop"),
             Kind::UndefinedFunction(name) => write!(f, "Undefined reference to '{name}'"),
+            Kind::NonConstantInit => write!(f, "Initializer element is not constant"),
         }
     }
 }
