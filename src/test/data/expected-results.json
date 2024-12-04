@@ -1588,7 +1588,7 @@
   "chapter_17/valid/libraries/sizeof_extern.c": {
     "return_code": 1
   },
-  "chapter_17/valid/libraries/test_for_memory_leaks.c": {
+  "chapter_17/valid/void/test_for_memory_leaks.c": {
     "return_code": 0
   },
   "chapter_17/valid/sizeof/simple.c": {

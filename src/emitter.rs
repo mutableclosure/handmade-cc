@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Expression, ForInit, FunctionBody, FunctionParameter, Lvalue,
-        Program, Statement, Type as AstType, VariableDeclaration,
+        BinaryOp, Block, BlockItem, Expression, ExpressionKind, ForInit, FunctionBody,
+        FunctionParameter, Lvalue, Program, Statement, Type as AstType, VariableDeclaration,
     },
     ir::{ExternalFunction, Function, Global, Instruction, Module, Type as IrType, Variable},
 };
@@ -172,7 +172,9 @@ fn emit_variable_declaration(
 fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
     match statement {
         Statement::Return(expression) => {
-            emit_expression(expression, instructions);
+            if let Some(expression) = expression {
+                emit_expression(expression, instructions);
+            }
             instructions.push(Instruction::Return);
         }
         Statement::Expression(expression) => emit_expression_as_statement(expression, instructions),
@@ -275,72 +277,76 @@ fn emit_for_init(for_init: ForInit, instructions: &mut Vec<Instruction>) {
 }
 
 fn emit_expression_as_statement(expression: Expression, instructions: &mut Vec<Instruction>) {
+    let r#type = expression.r#type;
     emit_expression(expression, instructions);
-    instructions.push(Instruction::Drop);
+    match r#type {
+        AstType::Int => instructions.push(Instruction::Drop),
+        AstType::Void => {}
+    }
 }
 
 fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) {
-    match expression {
-        Expression::Constant(value) => instructions.push(Instruction::PushConstant(value)),
-        Expression::Global(name) => instructions.push(Instruction::GlobalGet(name)),
-        Expression::Variable(name) => instructions.push(Instruction::LocalGet(name)),
-        Expression::BitwiseComplement(expression) => {
+    match expression.kind {
+        ExpressionKind::Constant(value) => instructions.push(Instruction::PushConstant(value)),
+        ExpressionKind::Global(name) => instructions.push(Instruction::GlobalGet(name)),
+        ExpressionKind::Variable(name) => instructions.push(Instruction::LocalGet(name)),
+        ExpressionKind::BitwiseComplement(expression) => {
             emit_expression(*expression, instructions);
             instructions.push(Instruction::PushConstant(-1));
             instructions.push(Instruction::Xor);
         }
-        Expression::Negation(expression) => {
+        ExpressionKind::Negation(expression) => {
             instructions.push(Instruction::PushConstant(0));
             emit_expression(*expression, instructions);
             instructions.push(Instruction::Sub);
         }
-        Expression::Not(expression) => {
+        ExpressionKind::Not(expression) => {
             emit_expression(*expression, instructions);
             instructions.push(Instruction::Eqz);
         }
-        Expression::PrefixIncrement(expression) => {
+        ExpressionKind::PrefixIncrement(expression) => {
             emit_prefix_op(*expression, Instruction::Add, instructions);
         }
-        Expression::PrefixDecrement(expression) => {
+        ExpressionKind::PrefixDecrement(expression) => {
             emit_prefix_op(*expression, Instruction::Sub, instructions);
         }
-        Expression::PostfixIncrement(expression) => {
+        ExpressionKind::PostfixIncrement(expression) => {
             emit_postfix_op(*expression, Instruction::Add, instructions);
         }
-        Expression::PostfixDecrement(expression) => {
+        ExpressionKind::PostfixDecrement(expression) => {
             emit_postfix_op(*expression, Instruction::Sub, instructions);
         }
-        Expression::BinaryOp(BinaryOp::Add, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Add, left, right) => {
             emit_op(*left, *right, Instruction::Add, instructions);
         }
-        Expression::BinaryOp(BinaryOp::Subtract, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Subtract, left, right) => {
             emit_op(*left, *right, Instruction::Sub, instructions);
         }
-        Expression::BinaryOp(BinaryOp::Multiply, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Multiply, left, right) => {
             emit_op(*left, *right, Instruction::Mul, instructions);
         }
-        Expression::BinaryOp(BinaryOp::Divide, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Divide, left, right) => {
             emit_op(*left, *right, Instruction::Div, instructions);
         }
-        Expression::BinaryOp(BinaryOp::Remainder, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Remainder, left, right) => {
             emit_op(*left, *right, Instruction::Rem, instructions);
         }
-        Expression::BinaryOp(BinaryOp::BitwiseAnd, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::BitwiseAnd, left, right) => {
             emit_op(*left, *right, Instruction::And, instructions);
         }
-        Expression::BinaryOp(BinaryOp::BitwiseOr, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::BitwiseOr, left, right) => {
             emit_op(*left, *right, Instruction::Or, instructions);
         }
-        Expression::BinaryOp(BinaryOp::Xor, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Xor, left, right) => {
             emit_op(*left, *right, Instruction::Xor, instructions);
         }
-        Expression::BinaryOp(BinaryOp::LeftShift, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::LeftShift, left, right) => {
             emit_op(*left, *right, Instruction::ShiftLeft, instructions);
         }
-        Expression::BinaryOp(BinaryOp::RightShift, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::RightShift, left, right) => {
             emit_op(*left, *right, Instruction::ShiftRight, instructions);
         }
-        Expression::BinaryOp(BinaryOp::And, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::And, left, right) => {
             emit_expression(*left, instructions);
             instructions.push(Instruction::Eqz);
             instructions.push(Instruction::IfWithResult);
@@ -353,7 +359,7 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             instructions.push(Instruction::Select);
             instructions.push(Instruction::End);
         }
-        Expression::BinaryOp(BinaryOp::Or, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Or, left, right) => {
             emit_expression(*left, instructions);
             instructions.push(Instruction::Eqz);
             instructions.push(Instruction::IfWithResult);
@@ -366,67 +372,70 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
             instructions.push(Instruction::PushConstant(1));
             instructions.push(Instruction::End);
         }
-        Expression::BinaryOp(BinaryOp::EqualTo, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::EqualTo, left, right) => {
             emit_op(*left, *right, Instruction::Eq, instructions);
         }
-        Expression::BinaryOp(BinaryOp::NotEqualTo, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::NotEqualTo, left, right) => {
             emit_op(*left, *right, Instruction::Ne, instructions);
         }
-        Expression::BinaryOp(BinaryOp::LessThan, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::LessThan, left, right) => {
             emit_op(*left, *right, Instruction::Lt, instructions);
         }
-        Expression::BinaryOp(BinaryOp::LessThanOrEqualTo, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::LessThanOrEqualTo, left, right) => {
             emit_op(*left, *right, Instruction::Le, instructions);
         }
-        Expression::BinaryOp(BinaryOp::GreaterThan, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::GreaterThan, left, right) => {
             emit_op(*left, *right, Instruction::Gt, instructions);
         }
-        Expression::BinaryOp(BinaryOp::GreaterThanOrEqualTo, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::GreaterThanOrEqualTo, left, right) => {
             emit_op(*left, *right, Instruction::Ge, instructions);
         }
-        Expression::BinaryOp(BinaryOp::Assignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::Assignment, left, right) => {
             emit_expression(*right, instructions);
             emit_lvalue_tee((*left).into(), instructions);
         }
-        Expression::BinaryOp(BinaryOp::AddAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::AddAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Add, instructions);
         }
-        Expression::BinaryOp(BinaryOp::SubtractAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::SubtractAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Sub, instructions);
         }
-        Expression::BinaryOp(BinaryOp::MultiplyAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::MultiplyAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Mul, instructions);
         }
-        Expression::BinaryOp(BinaryOp::DivideAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::DivideAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Div, instructions);
         }
-        Expression::BinaryOp(BinaryOp::RemainderAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::RemainderAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Rem, instructions);
         }
-        Expression::BinaryOp(BinaryOp::BitwiseAndAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::BitwiseAndAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::And, instructions);
         }
-        Expression::BinaryOp(BinaryOp::BitwiseOrAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::BitwiseOrAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Or, instructions);
         }
-        Expression::BinaryOp(BinaryOp::XorAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::XorAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::Xor, instructions);
         }
-        Expression::BinaryOp(BinaryOp::LeftShiftAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::LeftShiftAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::ShiftLeft, instructions);
         }
-        Expression::BinaryOp(BinaryOp::RightShiftAssignment, left, right) => {
+        ExpressionKind::BinaryOp(BinaryOp::RightShiftAssignment, left, right) => {
             emit_assignment_op(*left, *right, Instruction::ShiftRight, instructions);
         }
-        Expression::Conditional(condition, then, r#else) => {
+        ExpressionKind::Conditional(condition, then, r#else) => {
             emit_expression(*condition, instructions);
-            instructions.push(Instruction::IfWithResult);
+            instructions.push(match then.r#type {
+                AstType::Int => Instruction::IfWithResult,
+                AstType::Void => Instruction::If,
+            });
             emit_expression(*then, instructions);
             instructions.push(Instruction::Else);
             emit_expression(*r#else, instructions);
             instructions.push(Instruction::End);
         }
-        Expression::FunctionCall(name, arguments) => {
+        ExpressionKind::FunctionCall(name, arguments) => {
             arguments
                 .into_iter()
                 .for_each(|a| emit_expression(a, instructions));
@@ -525,9 +534,9 @@ fn emit_label(identifier: &str, r#type: &str) -> Rc<String> {
 
 impl From<Expression> for Lvalue {
     fn from(value: Expression) -> Self {
-        match value {
-            Expression::Global(name) => Lvalue::Global(name),
-            Expression::Variable(name) => Lvalue::Variable(name),
+        match value.kind {
+            ExpressionKind::Global(name) => Lvalue::Global(name),
+            ExpressionKind::Variable(name) => Lvalue::Variable(name),
             _ => unreachable!(),
         }
     }

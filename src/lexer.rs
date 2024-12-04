@@ -142,6 +142,7 @@ impl Lexer<'_> {
     fn ignore_line(&mut self) {
         for c in self.source.by_ref() {
             if c == '\n' {
+                self.line_number += 1;
                 break;
             }
         }

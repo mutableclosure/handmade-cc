@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Expression, ForInit, FunctionBody, FunctionDeclaration,
-        FunctionParameter, GlobalDeclaration, Lvalue, Program, Statement, Type,
-        VariableDeclaration,
+        BinaryOp, Block, BlockItem, Expression, ExpressionKind, ForInit, FunctionBody,
+        FunctionDeclaration, FunctionParameter, GlobalDeclaration, Lvalue, Program, Statement,
+        Type, VariableDeclaration,
     },
     environment::{Environment, FunctionDeclarationType, GlobalDeclarationType, Symbol},
     evaluator::Evaluator,
@@ -62,7 +62,7 @@ impl<'a> Parser<'a> {
                 }
                 Token::Keyword(Keyword::Void) => {
                     let name = self.expect_identifier()?;
-                    if let Some(f) = self.function(name, Type::Int, DeclarationScope::Static)? {
+                    if let Some(f) = self.function(name, Type::Void, DeclarationScope::Static)? {
                         functions.push(f)
                     }
                 }
@@ -102,6 +102,7 @@ impl Parser<'_> {
         let init = if has_init {
             self.lexer.next()?;
             let expression = self.expression(0)?;
+            self.expect_int(&expression)?;
             Some(
                 self.evaluator
                     .evaluate_init_value(&expression)
@@ -215,7 +216,15 @@ impl Parser<'_> {
         match self.lexer.peek()? {
             Some(Token::Keyword(Keyword::Return)) => {
                 self.lexer.next()?;
-                let expression = self.expression(0)?;
+                let function = self.environment.function().unwrap();
+                let expression = match function.return_type {
+                    Type::Int => {
+                        let expression = self.expression(0)?;
+                        self.expect_int(&expression)?;
+                        Some(expression)
+                    }
+                    Type::Void => None,
+                };
                 self.expect_token(Token::Semicolon)?;
                 Ok(Statement::Return(expression))
             }
@@ -276,6 +285,9 @@ impl Parser<'_> {
                 self.expect_token(Token::OpenParenthesis)?;
                 let init = self.for_init()?;
                 let condition = self.maybe_expression(Token::Semicolon)?;
+                if let Some(e) = condition.as_ref() {
+                    self.expect_int(e)?;
+                }
                 let post = self.maybe_expression(Token::CloseParenthesis)?;
                 let (label, body) = self.loop_body()?;
                 self.environment.unnest();
@@ -293,6 +305,7 @@ impl Parser<'_> {
     fn condition(&mut self) -> Result<Expression, Error> {
         self.expect_token(Token::OpenParenthesis)?;
         let condition = self.expression(0)?;
+        self.expect_int(&condition)?;
         self.expect_token(Token::CloseParenthesis)?;
         Ok(condition)
     }
@@ -364,7 +377,9 @@ impl Parser<'_> {
 
         let init = if self.peek_token(Token::EqualSign)? {
             self.lexer.next()?;
-            Some(self.expression(0)?)
+            let expression = self.expression(0)?;
+            self.expect_int(&expression)?;
+            Some(expression)
         } else {
             None
         };
@@ -393,17 +408,30 @@ impl Parser<'_> {
                         self.expect_lvalue(&left)?;
                         precedence
                     } else {
+                        self.expect_int(&left)?;
                         precedence.saturating_add(1)
                     };
 
                     let right = self.expression(precedence)?;
-                    left = Expression::BinaryOp(op, left.into(), right.into());
+                    self.expect_int(&right)?;
+                    left = Expression::int(ExpressionKind::BinaryOp(op, left.into(), right.into()));
                 }
                 Op::Conditional => {
+                    self.expect_int(&left)?;
                     let middle = self.expression(0)?;
                     self.expect_token(Token::Colon)?;
                     let right = self.expression(precedence)?;
-                    left = Expression::Conditional(left.into(), middle.into(), right.into());
+                    let r#type = match (middle.r#type, right.r#type) {
+                        (Type::Int, Type::Int) => Type::Int,
+                        (Type::Void, Type::Void) => Type::Void,
+                        (Type::Int, Type::Void) | (Type::Void, Type::Int) => {
+                            return Err(self.err(ErrorKind::VoidNotIgnored))
+                        }
+                    };
+                    left = Expression {
+                        kind: ExpressionKind::Conditional(left.into(), middle.into(), right.into()),
+                        r#type,
+                    };
                 }
             }
 
@@ -415,7 +443,7 @@ impl Parser<'_> {
 
     fn factor(&mut self) -> Result<Expression, Error> {
         match self.lexer.next()? {
-            Some(Token::Constant(value)) => Ok(Expression::Constant(value)),
+            Some(Token::Constant(value)) => Ok(Expression::int(ExpressionKind::Constant(value))),
             Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoPlusSigns)? => {
                 self.lexer.next()?;
                 self.environment
@@ -423,7 +451,8 @@ impl Parser<'_> {
                     .map(|lvalue| lvalue.into())
                     .map_err(|kind| self.err(kind))
                     .map(Box::new)
-                    .map(Expression::PostfixIncrement)
+                    .map(ExpressionKind::PostfixIncrement)
+                    .map(Expression::int)
             }
             Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoHyphens)? => {
                 self.lexer.next()?;
@@ -432,37 +461,51 @@ impl Parser<'_> {
                     .map(|lvalue| lvalue.into())
                     .map_err(|kind| self.err(kind))
                     .map(Box::new)
-                    .map(Expression::PostfixDecrement)
+                    .map(ExpressionKind::PostfixDecrement)
+                    .map(Expression::int)
             }
             Some(Token::Identifier(identifier)) => self.symbol(identifier),
             Some(Token::TwoPlusSigns) => {
                 let variable = self.factor()?;
                 self.expect_lvalue(&variable)?;
-                Ok(Expression::PrefixIncrement(variable.into()))
+                let kind = ExpressionKind::PrefixIncrement(variable.into());
+                Ok(Expression::int(kind))
             }
             Some(Token::TwoHyphens) => {
                 let variable = self.factor()?;
                 self.expect_lvalue(&variable)?;
-                Ok(Expression::PrefixDecrement(variable.into()))
+                let kind = ExpressionKind::PrefixDecrement(variable.into());
+                Ok(Expression::int(kind))
             }
             Some(Token::Tilde) => self
                 .factor()
                 .map(Box::new)
-                .map(Expression::BitwiseComplement),
-            Some(Token::Hyphen) => self.factor().map(Box::new).map(Expression::Negation),
-            Some(Token::ExclamationPoint) => self.factor().map(Box::new).map(Expression::Not),
+                .map(ExpressionKind::BitwiseComplement)
+                .map(Expression::int),
+            Some(Token::Hyphen) => self
+                .factor()
+                .map(Box::new)
+                .map(ExpressionKind::Negation)
+                .map(Expression::int),
+            Some(Token::ExclamationPoint) => self
+                .factor()
+                .map(Box::new)
+                .map(ExpressionKind::Not)
+                .map(Expression::int),
             Some(Token::OpenParenthesis) => {
                 let expression = self.expression(0)?;
                 let expression = self
                     .expect_token(Token::CloseParenthesis)
                     .map(|()| expression)?;
-                if matches!(expression, Expression::Variable(_)) {
+                if matches!(expression.kind, ExpressionKind::Variable(_)) {
                     if self.peek_token(Token::TwoPlusSigns)? {
                         self.lexer.next()?;
-                        return Ok(Expression::PostfixIncrement(expression.into()));
+                        let kind = ExpressionKind::PostfixIncrement(expression.into());
+                        return Ok(Expression::int(kind));
                     } else if self.peek_token(Token::TwoHyphens)? {
                         self.lexer.next()?;
-                        return Ok(Expression::PostfixDecrement(expression.into()));
+                        let kind = ExpressionKind::PostfixDecrement(expression.into());
+                        return Ok(Expression::int(kind));
                     }
                 }
                 Ok(expression)
@@ -478,11 +521,11 @@ impl Parser<'_> {
             .map_err(|kind| self.err(kind))?;
 
         match symbol {
-            Symbol::Global(_) => Ok(Expression::Global(name)),
-            Symbol::Variable => Ok(Expression::Variable(name)),
+            Symbol::Global(_) => Ok(Expression::int(ExpressionKind::Global(name))),
+            Symbol::Variable => Ok(Expression::int(ExpressionKind::Variable(name))),
             Symbol::Function(function) => {
                 let parameters = function.parameters.values().copied().collect::<Vec<_>>();
-                assert!(matches!(function.return_type, Type::Int));
+                let r#type = function.return_type;
                 self.expect_token(Token::OpenParenthesis)?;
 
                 let mut arguments = Vec::new();
@@ -490,6 +533,7 @@ impl Parser<'_> {
                 for (index, param_type) in parameters.iter().enumerate() {
                     let argument = self.expression(0)?;
                     assert!(matches!(param_type, Type::Int));
+                    self.expect_int(&argument)?;
                     arguments.push(argument);
 
                     if index < parameters.len() - 1 {
@@ -499,7 +543,10 @@ impl Parser<'_> {
 
                 self.expect_token(Token::CloseParenthesis)?;
 
-                Ok(Expression::FunctionCall(name, arguments))
+                Ok(Expression {
+                    kind: ExpressionKind::FunctionCall(name, arguments),
+                    r#type,
+                })
             }
         }
     }
@@ -536,9 +583,16 @@ impl Parser<'_> {
     }
 
     fn expect_lvalue(&self, expression: &Expression) -> Result<(), Error> {
-        match expression {
-            Expression::Variable(_) | Expression::Global(_) => Ok(()),
+        match expression.kind {
+            ExpressionKind::Variable(_) | ExpressionKind::Global(_) => Ok(()),
             _ => Err(self.err(ErrorKind::InvalidLvalue)),
+        }
+    }
+
+    fn expect_int(&self, expression: &Expression) -> Result<(), Error> {
+        match expression.r#type {
+            Type::Int => Ok(()),
+            Type::Void => Err(self.err(ErrorKind::VoidNotIgnored)),
         }
     }
 
@@ -554,8 +608,17 @@ impl Parser<'_> {
 impl From<Lvalue> for Expression {
     fn from(value: Lvalue) -> Self {
         match value {
-            Lvalue::Global(name) => Expression::Global(name),
-            Lvalue::Variable(name) => Expression::Variable(name),
+            Lvalue::Global(name) => Expression::int(ExpressionKind::Global(name)),
+            Lvalue::Variable(name) => Expression::int(ExpressionKind::Variable(name)),
+        }
+    }
+}
+
+impl Expression {
+    fn int(kind: ExpressionKind) -> Self {
+        Self {
+            kind,
+            r#type: Type::Int,
         }
     }
 }

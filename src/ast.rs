@@ -42,7 +42,7 @@ pub struct VariableDeclaration {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Statement {
-    Return(Expression),
+    Return(Option<Expression>),
     Expression(Expression),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
     Compound(Block),
@@ -78,7 +78,13 @@ pub enum BlockItem {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub enum Expression {
+pub struct Expression {
+    pub kind: ExpressionKind,
+    pub r#type: Type,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum ExpressionKind {
     Constant(i32),
     Global(Rc<String>),
     Variable(Rc<String>),

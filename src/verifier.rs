@@ -1,7 +1,10 @@
 use alloc::string::ToString;
 
 use crate::{
-    ast::{Block, BlockItem, Expression, ForInit, FunctionBody, FunctionDeclaration, Statement},
+    ast::{
+        Block, BlockItem, Expression, ExpressionKind, ForInit, FunctionBody, FunctionDeclaration,
+        Statement,
+    },
     environment::Environment,
     Error, ErrorKind, Severity,
 };
@@ -101,7 +104,7 @@ impl Verifier<'_> {
     }
 
     fn verify_calls_in_expression(&self, expression: &Expression) -> Result<(), Error> {
-        if let Expression::FunctionCall(name, _) = expression {
+        if let ExpressionKind::FunctionCall(name, _) = &expression.kind {
             if !self.environment.is_function_defined(name.clone()) {
                 return Err(self.err(ErrorKind::UndefinedFunction(name.clone())));
             }

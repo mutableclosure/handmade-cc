@@ -71,6 +71,10 @@ impl Environment {
         self.function = Some(name);
     }
 
+    pub fn function(&self) -> Option<&Function> {
+        self.function.clone().and_then(|f| self.resolve_function(f))
+    }
+
     pub fn exit_function(&mut self) {
         self.function = None;
     }
@@ -226,11 +230,13 @@ impl Environment {
 
 impl Environment {
     fn resolve_function(&self, name: Rc<String>) -> Option<&Function> {
-        if let Ok((_, Symbol::Function(function))) = self.resolve_symbol(name) {
-            Some(function)
-        } else {
-            None
+        for symbols in self.symbols.iter().rev() {
+            if let Some(Symbol::Function(function)) = symbols.get(&name) {
+                return Some(function);
+            }
         }
+
+        None
     }
 }
 
