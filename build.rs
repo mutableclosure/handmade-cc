@@ -9,6 +9,7 @@ const EXPECTED_RESULTS: &str = "src/test/data/expected-results.json";
 const TESTS_DIR: &str = "src/test/data/tests";
 const EXTENSION: &str = "c";
 const RETURN_CODE: &str = "return_code";
+const STDOUT: &str = "stdout";
 const OUT_DIR: &str = "OUT_DIR";
 const GENERATED_TESTS: &str = "generated_tests.rs";
 
@@ -29,8 +30,15 @@ fn main() {
             .to_string_lossy()
             .into_owned();
         let expected_return_code = read_return_code(&expected_results, &path);
+        let expected_stdout = read_stdout(&expected_results, &path);
         let function_name = to_function_name(&path);
-        write_test_case(&mut output, &function_name, &path, expected_return_code);
+        write_test_case(
+            &mut output,
+            &function_name,
+            &path,
+            expected_return_code,
+            expected_stdout.unwrap_or_default(),
+        );
     }
 
     println!("cargo:rerun-if-changed=build.rs");
@@ -60,6 +68,13 @@ fn read_return_code(expected_results: &Value, source_path: &str) -> Option<i32> 
         .map(|v| v as i32)
 }
 
+fn read_stdout<'a>(expected_results: &'a Value, source_path: &str) -> Option<&'a str> {
+    expected_results
+        .get(source_path)
+        .and_then(|v| v.get(STDOUT))
+        .and_then(|v| v.as_str())
+}
+
 fn to_function_name(path: &str) -> String {
     path.replace("/", "_")
         .replace("\\", "_")
@@ -67,7 +82,13 @@ fn to_function_name(path: &str) -> String {
         .replace("-", "_")
 }
 
-fn write_test_case(file: &mut File, name: &str, path: &str, expected_return_code: Option<i32>) {
+fn write_test_case(
+    file: &mut File,
+    name: &str,
+    path: &str,
+    expected_return_code: Option<i32>,
+    expected_stdout: &str,
+) {
     writeln!(
         file,
         r##"#[test]
@@ -81,8 +102,9 @@ fn test_{name}() -> Result<(), String> {{
     if let Some(expected_return_code) = expected_return_code {
         writeln!(
             file,
-            r##"    let return_code = build_and_run(source_code)?;
-    assert_eq!(return_code as u8, {expected_return_code}, "Unexpected return code");"##
+            r##"    let (return_code, stdout) = build_and_run(source_code)?;
+    assert_eq!(return_code as u8, {expected_return_code}, "Unexpected return code");
+    assert_eq!(stdout, "{expected_stdout}", "Unexpected stdout");"##,
         )
         .unwrap();
     } else {

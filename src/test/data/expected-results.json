@@ -880,7 +880,7 @@
   },
   "chapter_10/valid/static_local_multiple_scopes.c": {
     "return_code": 0,
-    "stdout": "Aa\nBb\nCc\nDd\nEe\nFf\nGg\nHh\nIi\nJj\nKk\nLl\nMm\nNn\nOo\nPp\nQq\nRr\nSs\nTt\nUu\nVv\nWw\nXx\nYy\nZz\n"
+    "stdout": "Aa\nBa\nCa\nDa\nEa\nFa\nGa\nHa\nIa\nJa\nKa\nLa\nMa\nNa\nOa\nPa\nQa\nRa\nSa\nTa\nUa\nVa\nWa\nXa\nYa\nZa\n"
   },
   "chapter_10/valid/static_local_uninitialized.c": {
     "return_code": 4

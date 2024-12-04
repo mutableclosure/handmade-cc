@@ -14,7 +14,12 @@ static INIT: std::sync::Once = std::sync::Once::new();
 
 include!(concat!(env!("OUT_DIR"), "/generated_tests.rs"));
 
-fn build_and_run(source_code: &str) -> Result<i32, String> {
+#[derive(Debug, Default)]
+struct State {
+    stdout: Vec<i32>,
+}
+
+fn build_and_run(source_code: &str) -> Result<(i32, String), String> {
     #[cfg(feature = "std")]
     INIT.call_once(|| {
         std_logger::Config::logfmt().init();
@@ -33,10 +38,11 @@ fn build_and_run(source_code: &str) -> Result<i32, String> {
     let binary = wat::parse_str(wat).map_err(|error| error.to_string())?;
     let engine = Engine::default();
     let module = Module::new(&engine, &binary).map_err(|error| error.to_string())?;
-    let mut store = Store::new(&engine, ());
+    let state = State::default();
+    let mut store = Store::new(&engine, state);
     let memory_type = MemoryType::new(MEMORY_PAGES, Some(MEMORY_PAGES)).unwrap();
     let memory = Memory::new(&mut store, memory_type).unwrap();
-    let mut linker = <Linker<()>>::new(&engine);
+    let mut linker = <Linker<State>>::new(&engine);
     linker.define(ENV_MODULE, MEMORY_NAME, memory).unwrap();
     linker
         .define(ENV_MODULE, PUT_CHAR_NAME, Func::wrap(&mut store, putchar))
@@ -56,10 +62,19 @@ fn build_and_run(source_code: &str) -> Result<i32, String> {
         panic!("Execution took too long!");
     }
 
-    result
+    let stdout = String::from_iter(
+        store
+            .data()
+            .stdout
+            .iter()
+            .map(|c| char::from_u32(*c as u32).unwrap_or_default()),
+    );
+
+    result.map(|value| (value, stdout))
 }
 
-fn putchar(_: Caller<'_, ()>, c: i32) -> i32 {
-    println!("{c}");
+fn putchar(mut caller: Caller<'_, State>, c: i32) -> i32 {
+    print!("{}", char::from_u32(c as u32).unwrap_or_default());
+    caller.data_mut().stdout.push(c);
     c
 }

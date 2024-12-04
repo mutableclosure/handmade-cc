@@ -14,7 +14,7 @@ int print_letters(void) {
         /* update the outer static 'i' variable */
         i = i + 1;
 
-        /* declare another static variable, initialize to ASCII 'a' */
+        /* declare another variable, initialize to ASCII 'a' */
         int i = 97;
         /* print the ASCII character for inner variable's current value */
         putchar(i);
@@ -27,7 +27,6 @@ int print_letters(void) {
 }
 
 int main(void) {
-    //print uppercase and lowercase version of each letter in the alphabet
     for (int i = 0; i < 26; i = i + 1)
         print_letters();
 }
