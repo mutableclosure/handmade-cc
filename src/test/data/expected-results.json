@@ -1,4 +1,7 @@
 {
+  "const/valid/constant_expression.c": {
+    "return_code": 239
+  },
   "chapter_1/valid/multi_digit.c": {
     "return_code": 100
   },
