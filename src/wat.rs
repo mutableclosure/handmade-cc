@@ -57,7 +57,13 @@ impl Wat {
         self.out.push_str(&global.name);
 
         match global.r#type {
-            Type::Int32 => self.out.push_str(" (mut i32)"),
+            Type::Int32 => {
+                if global.is_constant {
+                    self.out.push_str(" i32")
+                } else {
+                    self.out.push_str(" (mut i32)")
+                }
+            }
             Type::Void => unreachable!(),
         }
 

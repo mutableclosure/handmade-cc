@@ -11,6 +11,7 @@ pub struct Module {
 pub struct Global {
     pub name: Rc<String>,
     pub r#type: Type,
+    pub is_constant: bool,
     pub value: Option<i32>,
 }
 

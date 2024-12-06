@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Expression, ExpressionKind, ForInit, FunctionBody,
-        FunctionDeclaration, FunctionParameter, GlobalDeclaration, Lvalue, Program, Statement,
-        Type, VariableDeclaration,
+        BinaryOp, Block, BlockItem, ConstQualifier, Expression, ExpressionKind, ForInit,
+        FunctionBody, FunctionDeclaration, FunctionParameter, GlobalDeclaration, Lvalue, Program,
+        Statement, Type, VariableDeclaration,
     },
     environment::{Environment, FunctionDeclarationType, GlobalDeclarationType, Symbol},
     evaluator::Evaluator,
@@ -54,7 +54,7 @@ impl<'a> Parser<'a> {
                             functions.push(f)
                         }
                     } else {
-                        let global = self.global(name, Type::Int)?;
+                        let global = self.global(name, Type::Int, ConstQualifier::NonConst)?;
                         if global.init.is_some() || !globals.contains_key(&global.name) {
                             globals.insert(global.name.clone(), global);
                         }
@@ -64,6 +64,14 @@ impl<'a> Parser<'a> {
                     let name = self.expect_identifier()?;
                     if let Some(f) = self.function(name, Type::Void, DeclarationScope::Static)? {
                         functions.push(f)
+                    }
+                }
+                Token::Keyword(Keyword::Const) => {
+                    self.expect_token(Token::Keyword(Keyword::Int))?;
+                    let name = self.expect_identifier()?;
+                    let global = self.global(name, Type::Int, ConstQualifier::Const)?;
+                    if global.init.is_some() || !globals.contains_key(&global.name) {
+                        globals.insert(global.name.clone(), global);
                     }
                 }
                 Token::Keyword(Keyword::Extern) => {
@@ -85,35 +93,45 @@ impl<'a> Parser<'a> {
 }
 
 impl Parser<'_> {
-    fn global(&mut self, name: Rc<String>, r#type: Type) -> Result<GlobalDeclaration, Error> {
+    fn global(
+        &mut self,
+        name: Rc<String>,
+        r#type: Type,
+        r#const: ConstQualifier,
+    ) -> Result<GlobalDeclaration, Error> {
         let has_init = self.peek_token(Token::EqualSign)?;
+        let init = if has_init {
+            self.lexer.next()?;
+            let expression = self.expression(0)?;
+            Some(
+                self.evaluator
+                    .evaluate_i32(&expression, &self.environment)
+                    .map_err(|e| self.err(e))?,
+            )
+        } else {
+            None
+        };
         let name = self
             .environment
             .declare_global(
                 name,
+                r#const,
                 if has_init {
-                    GlobalDeclarationType::NonTentative
+                    GlobalDeclarationType::NonTentative(init)
                 } else {
                     GlobalDeclarationType::Tentative
                 },
             )
             .map_err(|kind| self.err(kind))?;
 
-        let init = if has_init {
-            self.lexer.next()?;
-            let expression = self.expression(0)?;
-            Some(
-                self.evaluator
-                    .evaluate_i32(&expression)
-                    .map_err(|e| self.err(e))?,
-            )
-        } else {
-            None
-        };
-
         self.expect_token(Token::Semicolon)?;
 
-        Ok(GlobalDeclaration { name, r#type, init })
+        Ok(GlobalDeclaration {
+            name,
+            r#type,
+            r#const,
+            init,
+        })
     }
 
     fn extern_declaration(&mut self) -> Result<Option<FunctionDeclaration>, Error> {
@@ -193,10 +211,20 @@ impl Parser<'_> {
             self.lexer.next()?;
         } else {
             loop {
+                let r#const = if self.peek_token(Token::Keyword(Keyword::Const))? {
+                    self.lexer.next()?;
+                    ConstQualifier::Const
+                } else {
+                    ConstQualifier::NonConst
+                };
                 self.expect_token(Token::Keyword(Keyword::Int))?;
                 let name = self.expect_identifier()?;
                 let r#type = Type::Int;
-                parameters.push(FunctionParameter { name, r#type });
+                parameters.push(FunctionParameter {
+                    name,
+                    r#type,
+                    r#const,
+                });
 
                 if !self.peek_token(Token::Comma)? {
                     break;
@@ -311,7 +339,16 @@ impl Parser<'_> {
 
     fn for_init(&mut self) -> Result<Option<ForInit>, Error> {
         if self.peek_token(Token::Keyword(Keyword::Int))? {
-            Ok(Some(ForInit::Declaration(self.variable()?)))
+            self.lexer.next()?;
+            Ok(Some(ForInit::Declaration(
+                self.variable(ConstQualifier::NonConst)?,
+            )))
+        } else if self.peek_token(Token::Keyword(Keyword::Const))? {
+            self.lexer.next()?;
+            self.expect_token(Token::Keyword(Keyword::Int))?;
+            Ok(Some(ForInit::Declaration(
+                self.variable(ConstQualifier::Const)?,
+            )))
         } else if self.peek_token(Token::Semicolon)? {
             self.lexer.next()?;
             Ok(None)
@@ -358,20 +395,27 @@ impl Parser<'_> {
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {
         if self.peek_token(Token::Keyword(Keyword::Int))? {
-            Ok(BlockItem::VariableDeclaration(self.variable()?))
+            self.lexer.next()?;
+            Ok(BlockItem::VariableDeclaration(
+                self.variable(ConstQualifier::NonConst)?,
+            ))
+        } else if self.peek_token(Token::Keyword(Keyword::Const))? {
+            self.lexer.next()?;
+            self.expect_token(Token::Keyword(Keyword::Int))?;
+            Ok(BlockItem::VariableDeclaration(
+                self.variable(ConstQualifier::Const)?,
+            ))
         } else {
             Ok(BlockItem::Statement(self.statement()?))
         }
     }
 
-    fn variable(&mut self) -> Result<VariableDeclaration, Error> {
-        self.expect_token(Token::Keyword(Keyword::Int))?;
-
+    fn variable(&mut self, r#const: ConstQualifier) -> Result<VariableDeclaration, Error> {
         let r#type = Type::Int;
         let identifier = self.expect_identifier()?;
         let name = self
             .environment
-            .declare_variable(identifier)
+            .declare_variable(identifier, r#const)
             .map_err(|kind| self.err(kind))?;
 
         let init = if self.peek_token(Token::EqualSign)? {
@@ -385,7 +429,12 @@ impl Parser<'_> {
 
         self.expect_token(Token::Semicolon)?;
 
-        Ok(VariableDeclaration { name, r#type, init })
+        Ok(VariableDeclaration {
+            name,
+            r#type,
+            r#const,
+            init,
+        })
     }
 
     fn expression(&mut self, min_precedence: u32) -> Result<Expression, Error> {
@@ -495,7 +544,7 @@ impl Parser<'_> {
                 let expression = self
                     .expect_token(Token::CloseParenthesis)
                     .map(|()| expression)?;
-                if matches!(expression.kind, ExpressionKind::Variable(_)) {
+                if self.expect_lvalue(&expression).is_ok() {
                     if self.peek_token(Token::TwoPlusSigns)? {
                         self.lexer.next()?;
                         let kind = ExpressionKind::PostfixIncrement(expression.into());
@@ -519,8 +568,12 @@ impl Parser<'_> {
             .map_err(|kind| self.err(kind))?;
 
         match symbol {
-            Symbol::Global(_) => Ok(Expression::int(ExpressionKind::Global(name))),
-            Symbol::Variable => Ok(Expression::int(ExpressionKind::Variable(name))),
+            Symbol::Global(r#const, _) => {
+                Ok(Expression::int(ExpressionKind::Global(name, *r#const)))
+            }
+            Symbol::Variable(r#const) => {
+                Ok(Expression::int(ExpressionKind::Variable(name, *r#const)))
+            }
             Symbol::Function(function) => {
                 let parameters = function.parameters.values().copied().collect::<Vec<_>>();
                 let r#type = function.return_type;
@@ -528,7 +581,7 @@ impl Parser<'_> {
 
                 let mut arguments = Vec::new();
 
-                for (index, param_type) in parameters.iter().enumerate() {
+                for (index, (param_type, _)) in parameters.iter().enumerate() {
                     let argument = self.expression(0)?;
                     assert!(matches!(param_type, Type::Int));
                     self.expect_int(&argument)?;
@@ -582,7 +635,8 @@ impl Parser<'_> {
 
     fn expect_lvalue(&self, expression: &Expression) -> Result<(), Error> {
         match expression.kind {
-            ExpressionKind::Variable(_) | ExpressionKind::Global(_) => Ok(()),
+            ExpressionKind::Variable(_, ConstQualifier::NonConst)
+            | ExpressionKind::Global(_, ConstQualifier::NonConst) => Ok(()),
             _ => Err(self.err(ErrorKind::InvalidLvalue)),
         }
     }
@@ -606,8 +660,12 @@ impl Parser<'_> {
 impl From<Lvalue> for Expression {
     fn from(value: Lvalue) -> Self {
         match value {
-            Lvalue::Global(name) => Expression::int(ExpressionKind::Global(name)),
-            Lvalue::Variable(name) => Expression::int(ExpressionKind::Variable(name)),
+            Lvalue::Global(name) => {
+                Expression::int(ExpressionKind::Global(name, ConstQualifier::NonConst))
+            }
+            Lvalue::Variable(name) => {
+                Expression::int(ExpressionKind::Variable(name, ConstQualifier::NonConst))
+            }
         }
     }
 }

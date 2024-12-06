@@ -11,7 +11,7 @@ pub enum Kind {
     ExpectedIdentifier(Option<Token>),
     ExpectedToken(Token, Option<Token>),
     ExpectedExpression(Option<Token>),
-    Redefined(Rc<String>),
+    Redefinition(Rc<String>),
     Undeclared(Rc<String>),
     ConflictingTypes(Rc<String>),
     InvalidLvalue,
@@ -20,6 +20,7 @@ pub enum Kind {
     UndefinedFunction(Rc<String>),
     NonConstantExpression,
     NonIntegerExpression,
+    CannotAssignToConst(Rc<String>),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -74,7 +75,7 @@ impl Display for Kind {
                 write!(f, "Expected expression")?;
                 write_found(f, found)
             }
-            Kind::Redefined(identifier) => write!(f, "Redefinition of '{identifier}'"),
+            Kind::Redefinition(identifier) => write!(f, "Redefinition of '{identifier}'"),
             Kind::Undeclared(identifier) => write!(f, "'{identifier}' undeclared"),
             Kind::ConflictingTypes(identifier) => write!(f, "Conflicting types for '{identifier}'"),
             Kind::InvalidLvalue => write!(f, "'Invalid lvalue"),
@@ -85,6 +86,9 @@ impl Display for Kind {
             Kind::UndefinedFunction(name) => write!(f, "Undefined reference to '{name}'"),
             Kind::NonConstantExpression => write!(f, "Expression is not constant"),
             Kind::NonIntegerExpression => write!(f, "Expression has non-integer type"),
+            Kind::CannotAssignToConst(name) => {
+                write!(f, "Cannot assign to const-qualified variable '{name}'")
+            }
         }
     }
 }

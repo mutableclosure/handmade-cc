@@ -1,5 +1,5 @@
 use crate::{
-    ast::{FunctionParameter, Lvalue, Type},
+    ast::{ConstQualifier, FunctionParameter, Lvalue, Type},
     ErrorKind,
 };
 use alloc::{
@@ -13,20 +13,20 @@ const LOOP_LABEL: &str = "loop";
 
 #[derive(Clone, Debug)]
 pub enum Symbol {
-    Global(GlobalDeclarationType),
-    Variable,
+    Global(ConstQualifier, GlobalDeclarationType),
+    Variable(ConstQualifier),
     Function(Function),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum GlobalDeclarationType {
     Tentative,
-    NonTentative,
+    NonTentative(Option<i32>),
 }
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub parameters: BTreeMap<Rc<String>, Type>,
+    pub parameters: BTreeMap<Rc<String>, (Type, ConstQualifier)>,
     pub return_type: Type,
     pub declaration_type: FunctionDeclarationType,
 }
@@ -132,7 +132,7 @@ impl Environment {
                     }
                 }
 
-                Err(ErrorKind::Redefined(entry.key().clone()))
+                Err(ErrorKind::Redefinition(entry.key().clone()))
             }
         }
     }
@@ -140,34 +140,52 @@ impl Environment {
     pub fn declare_global(
         &mut self,
         identifier: Rc<String>,
+        r#const: ConstQualifier,
         declaration_type: GlobalDeclarationType,
     ) -> Result<Rc<String>, ErrorKind> {
         let symbols = self.symbols.last_mut().unwrap();
 
         match symbols.get(&identifier) {
-            Some(Symbol::Global(GlobalDeclarationType::Tentative)) | None => {
-                symbols.insert(identifier.clone(), Symbol::Global(declaration_type));
+            None => {
+                symbols.insert(
+                    identifier.clone(),
+                    Symbol::Global(r#const, declaration_type),
+                );
                 Ok(identifier)
             }
-            Some(Symbol::Global(GlobalDeclarationType::NonTentative))
-                if matches!(declaration_type, GlobalDeclarationType::Tentative) =>
+            Some(Symbol::Global(existing_const, GlobalDeclarationType::Tentative))
+                if r#const == *existing_const =>
+            {
+                symbols.insert(
+                    identifier.clone(),
+                    Symbol::Global(r#const, declaration_type),
+                );
+                Ok(identifier)
+            }
+            Some(Symbol::Global(existing_const, GlobalDeclarationType::NonTentative(_)))
+                if declaration_type == GlobalDeclarationType::Tentative
+                    && r#const == *existing_const =>
             {
                 Ok(identifier)
             }
-            Some(Symbol::Global(_)) | Some(Symbol::Variable) | Some(Symbol::Function(_)) => {
-                Err(ErrorKind::Redefined(identifier))
+            Some(Symbol::Global(_, _)) | Some(Symbol::Variable(_)) | Some(Symbol::Function(_)) => {
+                Err(ErrorKind::Redefinition(identifier))
             }
         }
     }
 
-    pub fn declare_variable(&mut self, identifier: Rc<String>) -> Result<Rc<String>, ErrorKind> {
+    pub fn declare_variable(
+        &mut self,
+        identifier: Rc<String>,
+        r#const: ConstQualifier,
+    ) -> Result<Rc<String>, ErrorKind> {
         if let Some(f) = self
             .function
             .as_ref()
             .and_then(|f| self.resolve_function(f.clone()))
         {
             if f.parameters.contains_key(&identifier) {
-                return Err(ErrorKind::Redefined(identifier));
+                return Err(ErrorKind::Redefinition(identifier));
             }
         }
 
@@ -175,9 +193,9 @@ impl Environment {
         let symbols = self.symbols.last_mut().unwrap();
 
         if symbols.contains_key(&name) {
-            Err(ErrorKind::Redefined(name))
+            Err(ErrorKind::Redefinition(name))
         } else {
-            symbols.insert(name.clone(), Symbol::Variable);
+            symbols.insert(name.clone(), Symbol::Variable(r#const));
             Ok(name)
         }
     }
@@ -186,9 +204,11 @@ impl Environment {
         let (name, symbol) = self.resolve_symbol(identifier)?;
 
         match symbol {
-            Symbol::Global(_) => Ok(Lvalue::Global(name)),
-            Symbol::Variable => Ok(Lvalue::Variable(name)),
-            Symbol::Function(_) => Err(ErrorKind::InvalidLvalue),
+            Symbol::Global(ConstQualifier::NonConst, _) => Ok(Lvalue::Global(name)),
+            Symbol::Variable(ConstQualifier::NonConst) => Ok(Lvalue::Variable(name)),
+            Symbol::Global(ConstQualifier::Const, _)
+            | Symbol::Variable(ConstQualifier::Const)
+            | Symbol::Function(_) => Err(ErrorKind::InvalidLvalue),
         }
     }
 
@@ -208,9 +228,15 @@ impl Environment {
     ) -> Result<(Rc<String>, &Symbol), ErrorKind> {
         for (level, symbols) in self.symbols.iter().enumerate().rev() {
             if let Some(Symbol::Function(f)) = self.function.as_ref().and_then(|f| symbols.get(f)) {
-                if let Some(r#type) = f.parameters.get(&identifier) {
+                if let Some((r#type, r#const)) = f.parameters.get(&identifier) {
                     assert!(matches!(r#type, Type::Int));
-                    return Ok((identifier, &Symbol::Variable));
+                    return Ok((
+                        identifier,
+                        match r#const {
+                            ConstQualifier::NonConst => &Symbol::Variable(ConstQualifier::NonConst),
+                            ConstQualifier::Const => &Symbol::Variable(ConstQualifier::Const),
+                        },
+                    ));
                 }
             }
 
@@ -248,10 +274,22 @@ fn make_name(identifier: &str, level: usize) -> Rc<String> {
     name.into()
 }
 
-fn to_parameters(parameters: Vec<FunctionParameter>) -> BTreeMap<Rc<String>, Type> {
-    BTreeMap::from_iter(parameters.into_iter().map(|p| (p.name, p.r#type)))
+fn to_parameters(
+    parameters: Vec<FunctionParameter>,
+) -> BTreeMap<Rc<String>, (Type, ConstQualifier)> {
+    BTreeMap::from_iter(
+        parameters
+            .into_iter()
+            .map(|p| (p.name, (p.r#type, p.r#const))),
+    )
 }
 
-fn parameters_match(found: &[FunctionParameter], expected: &BTreeMap<Rc<String>, Type>) -> bool {
-    found.iter().map(|p| &p.r#type).eq(expected.values())
+fn parameters_match(
+    found: &[FunctionParameter],
+    expected: &BTreeMap<Rc<String>, (Type, ConstQualifier)>,
+) -> bool {
+    found
+        .iter()
+        .map(|p| &p.r#type)
+        .eq(expected.values().map(|(t, _)| t))
 }

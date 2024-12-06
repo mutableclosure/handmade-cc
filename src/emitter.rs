@@ -1,7 +1,8 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Expression, ExpressionKind, ForInit, FunctionBody,
-        FunctionParameter, Lvalue, Program, Statement, Type as AstType, VariableDeclaration,
+        BinaryOp, Block, BlockItem, ConstQualifier, Expression, ExpressionKind, ForInit,
+        FunctionBody, FunctionParameter, Lvalue, Program, Statement, Type as AstType,
+        VariableDeclaration,
     },
     ir::{ExternalFunction, Function, Global, Instruction, Module, Type as IrType, Variable},
 };
@@ -22,6 +23,7 @@ impl Emitter {
             .map(|g| Global {
                 name: g.name,
                 r#type: g.r#type.into(),
+                is_constant: is_constant(g.r#const),
                 value: g.init,
             })
             .collect();
@@ -288,8 +290,8 @@ fn emit_expression_as_statement(expression: Expression, instructions: &mut Vec<I
 fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) {
     match expression.kind {
         ExpressionKind::Constant(value) => instructions.push(Instruction::PushConstant(value)),
-        ExpressionKind::Global(name) => instructions.push(Instruction::GlobalGet(name)),
-        ExpressionKind::Variable(name) => instructions.push(Instruction::LocalGet(name)),
+        ExpressionKind::Global(name, _) => instructions.push(Instruction::GlobalGet(name)),
+        ExpressionKind::Variable(name, _) => instructions.push(Instruction::LocalGet(name)),
         ExpressionKind::BitwiseComplement(expression) => {
             emit_expression(*expression, instructions);
             instructions.push(Instruction::PushConstant(-1));
@@ -540,11 +542,18 @@ fn emit_label(identifier: &str, r#type: &str) -> Rc<String> {
     label.into()
 }
 
+fn is_constant(r#const: ConstQualifier) -> bool {
+    match r#const {
+        ConstQualifier::NonConst => false,
+        ConstQualifier::Const => true,
+    }
+}
+
 impl From<Expression> for Lvalue {
     fn from(value: Expression) -> Self {
         match value.kind {
-            ExpressionKind::Global(name) => Lvalue::Global(name),
-            ExpressionKind::Variable(name) => Lvalue::Variable(name),
+            ExpressionKind::Global(name, ConstQualifier::NonConst) => Lvalue::Global(name),
+            ExpressionKind::Variable(name, ConstQualifier::NonConst) => Lvalue::Variable(name),
             _ => unreachable!(),
         }
     }

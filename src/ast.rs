@@ -10,6 +10,7 @@ pub struct Program {
 pub struct GlobalDeclaration {
     pub name: Rc<String>,
     pub r#type: Type,
+    pub r#const: ConstQualifier,
     pub init: Option<i32>,
 }
 
@@ -31,12 +32,14 @@ pub enum FunctionBody {
 pub struct FunctionParameter {
     pub name: Rc<String>,
     pub r#type: Type,
+    pub r#const: ConstQualifier,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct VariableDeclaration {
     pub name: Rc<String>,
     pub r#type: Type,
+    pub r#const: ConstQualifier,
     pub init: Option<Expression>,
 }
 
@@ -86,8 +89,8 @@ pub struct Expression {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum ExpressionKind {
     Constant(i32),
-    Global(Rc<String>),
-    Variable(Rc<String>),
+    Global(Rc<String>, ConstQualifier),
+    Variable(Rc<String>, ConstQualifier),
     BitwiseComplement(Box<Expression>),
     Negation(Box<Expression>),
     Not(Box<Expression>),
@@ -137,6 +140,12 @@ pub enum BinaryOp {
     XorAssignment,
     LeftShiftAssignment,
     RightShiftAssignment,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum ConstQualifier {
+    NonConst,
+    Const,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]

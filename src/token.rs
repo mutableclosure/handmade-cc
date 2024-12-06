@@ -62,6 +62,7 @@ pub enum Keyword {
     Break,
     Continue,
     Extern,
+    Const,
 }
 
 impl Display for Token {
@@ -129,6 +130,7 @@ impl Display for Keyword {
             Keyword::Break => write!(f, "break"),
             Keyword::Continue => write!(f, "continue"),
             Keyword::Extern => write!(f, "extern"),
+            Keyword::Const => write!(f, "const"),
         }
     }
 }
