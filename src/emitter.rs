@@ -430,9 +430,17 @@ fn emit_expression(expression: Expression, instructions: &mut Vec<Instruction>) 
                 AstType::Int => Instruction::IfWithResult,
                 AstType::Void => Instruction::If,
             });
+            let r#type = then.r#type;
             emit_expression(*then, instructions);
+            if expression.r#type == AstType::Void && r#type != AstType::Void {
+                instructions.push(Instruction::Drop);
+            }
             instructions.push(Instruction::Else);
+            let r#type = r#else.r#type;
             emit_expression(*r#else, instructions);
+            if expression.r#type == AstType::Void && r#type != AstType::Void {
+                instructions.push(Instruction::Drop);
+            }
             instructions.push(Instruction::End);
         }
         ExpressionKind::FunctionCall(name, arguments) => {

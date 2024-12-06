@@ -102,10 +102,9 @@ impl Parser<'_> {
         let init = if has_init {
             self.lexer.next()?;
             let expression = self.expression(0)?;
-            self.expect_int(&expression)?;
             Some(
                 self.evaluator
-                    .evaluate_init_value(&expression)
+                    .evaluate_i32(&expression)
                     .map_err(|e| self.err(e))?,
             )
         } else {
@@ -423,10 +422,9 @@ impl Parser<'_> {
                     let right = self.expression(precedence)?;
                     let r#type = match (middle.r#type, right.r#type) {
                         (Type::Int, Type::Int) => Type::Int,
-                        (Type::Void, Type::Void) => Type::Void,
-                        (Type::Int, Type::Void) | (Type::Void, Type::Int) => {
-                            return Err(self.err(ErrorKind::VoidNotIgnored))
-                        }
+                        (Type::Void, Type::Void)
+                        | (Type::Int, Type::Void)
+                        | (Type::Void, Type::Int) => Type::Void,
                     };
                     left = Expression {
                         kind: ExpressionKind::Conditional(left.into(), middle.into(), right.into()),
@@ -592,7 +590,7 @@ impl Parser<'_> {
     fn expect_int(&self, expression: &Expression) -> Result<(), Error> {
         match expression.r#type {
             Type::Int => Ok(()),
-            Type::Void => Err(self.err(ErrorKind::VoidNotIgnored)),
+            Type::Void => Err(self.err(ErrorKind::NonIntegerExpression)),
         }
     }
 
