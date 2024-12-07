@@ -8,6 +8,27 @@
   "const/valid/const_in_for_init.c": {
     "return_code": 42
   },
+  "literals/valid/binary.c": {
+    "return_code": 5
+  },
+  "literals/valid/binary_capital_b.c": {
+    "return_code": 6
+  },
+  "literals/valid/binary_leading_zeroes.c": {
+    "return_code": 5
+  },
+  "literals/valid/hex.c": {
+    "return_code": 31
+  },
+  "literals/valid/hex_max.c": {
+    "return_code": 255
+  },
+  "literals/valid/hex_mixed_case.c": {
+    "return_code": 205
+  },
+  "literals/valid/hex_upper_case.c": {
+    "return_code": 239
+  },
   "chapter_1/valid/multi_digit.c": {
     "return_code": 100
   },

@@ -5,6 +5,7 @@ use core::fmt::{self, Display, Formatter, Result};
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Kind {
     InvalidToken(char),
+    InvalidConstant,
     ConstantTooLarge,
     UnknownType(Token),
     ExpectedType,
@@ -60,6 +61,7 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Kind::InvalidToken(found) => write!(f, "Invalid token: '{found}'"),
+            Kind::InvalidConstant => write!(f, "Invalid integer constant"),
             Kind::ConstantTooLarge => write!(f, "Integer literal too large"),
             Kind::UnknownType(found) => write!(f, "Unknown type: '{found}'"),
             Kind::ExpectedType => write!(f, "Expected type"),

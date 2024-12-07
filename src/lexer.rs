@@ -48,7 +48,17 @@ impl Lexer<'_> {
                 '\n' => self.line_number += 1,
                 _ if c.is_whitespace() => {}
                 _ if c.is_ascii_alphabetic() || c == '_' => return Ok(Some(self.identifier(c))),
-                _ if c.is_ascii_digit() => return Ok(Some(self.constant(c)?)),
+                '0' if self.source.next_if_eq(&'x').is_some()
+                    || self.source.next_if_eq(&'X').is_some() =>
+                {
+                    return Ok(Some(self.hex_constant()?))
+                }
+                '0' if self.source.next_if_eq(&'b').is_some()
+                    || self.source.next_if_eq(&'B').is_some() =>
+                {
+                    return Ok(Some(self.binary_constant()?))
+                }
+                _ if c.is_ascii_digit() => return Ok(Some(self.decimal_constant(c)?)),
                 '/' if self.source.next_if_eq(&'/').is_some() => self.ignore_line(),
                 '/' if self.source.next_if_eq(&'*').is_some() => self.ignore_multiline_comment(),
                 '(' => return Ok(Some(Token::OpenParenthesis)),
@@ -184,7 +194,15 @@ impl Lexer<'_> {
         }
     }
 
-    fn constant(&mut self, first: char) -> Result<Token, Error> {
+    fn hex_constant(&mut self) -> Result<Token, Error> {
+        self.integer_constant(16, |c| c.is_ascii_hexdigit())
+    }
+
+    fn binary_constant(&mut self) -> Result<Token, Error> {
+        self.integer_constant(2, |c| c == '0' || c == '1')
+    }
+
+    fn decimal_constant(&mut self, first: char) -> Result<Token, Error> {
         let mut token = vec![first];
 
         while let Some(c) = self.source.next_if(|c| c.is_ascii_digit()) {
@@ -197,6 +215,27 @@ impl Lexer<'_> {
             .parse::<i32>()
             .map_err(|_| self.err(ErrorKind::ConstantTooLarge))
             .map(Token::Constant)
+    }
+
+    fn integer_constant<F: Fn(char) -> bool>(
+        &mut self,
+        base: u32,
+        included: F,
+    ) -> Result<Token, Error> {
+        let mut string = String::new();
+
+        while let Some(c) = self.source.next_if(|c| included(*c)) {
+            string.push(c);
+        }
+
+        if string.is_empty() {
+            return Err(self.err(ErrorKind::InvalidConstant));
+        }
+
+        let value = i32::from_str_radix(&string, base)
+            .map_err(|_| self.err(ErrorKind::ConstantTooLarge))?;
+
+        Ok(Token::Constant(value))
     }
 
     fn err(&self, kind: ErrorKind) -> Error {
