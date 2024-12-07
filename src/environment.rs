@@ -10,6 +10,8 @@ use alloc::{
 };
 
 const LOOP_LABEL: &str = "loop";
+const SWITCH_LABEL: &str = "switch";
+const CASE_LABEL: &str = "case";
 
 #[derive(Clone, Debug)]
 pub enum Symbol {
@@ -42,7 +44,20 @@ pub enum FunctionDeclarationType {
 pub struct Environment {
     symbols: Vec<BTreeMap<Rc<String>, Symbol>>,
     function: Option<Rc<String>>,
-    loop_labels: Vec<Rc<String>>,
+    labels: Vec<Label>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum LabelContext {
+    Loop,
+    Switch,
+    Case,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct Label {
+    name: Rc<String>,
+    context: LabelContext,
 }
 
 impl Default for Environment {
@@ -50,7 +65,7 @@ impl Default for Environment {
         let mut environment = Self {
             symbols: Default::default(),
             function: Default::default(),
-            loop_labels: Default::default(),
+            labels: Default::default(),
         };
         environment.nest();
         environment
@@ -80,17 +95,47 @@ impl Environment {
     }
 
     pub fn enter_loop(&mut self) -> Rc<String> {
-        let label = make_name(LOOP_LABEL, self.loop_labels.len());
-        self.loop_labels.push(label);
-        self.loop_labels.last().unwrap().clone()
+        self.push_label(LabelContext::Loop)
     }
 
     pub fn loop_label(&self) -> Option<Rc<String>> {
-        self.loop_labels.last().cloned()
+        self.labels
+            .iter()
+            .rev()
+            .find_map(|l| (l.context == LabelContext::Loop).then(|| l.name.clone()))
+    }
+
+    pub fn loop_or_switch_label(&self) -> Option<Rc<String>> {
+        self.labels.iter().rev().find_map(|l| {
+            (l.context == LabelContext::Loop || l.context == LabelContext::Switch)
+                .then(|| l.name.clone())
+        })
     }
 
     pub fn exit_loop(&mut self) {
-        self.loop_labels.pop();
+        assert_eq!(
+            self.labels.last().map(|l| l.context),
+            Some(LabelContext::Loop)
+        );
+        self.labels.pop();
+    }
+
+    pub fn enter_switch(&mut self) -> Rc<String> {
+        self.push_label(LabelContext::Switch)
+    }
+
+    pub fn case(&mut self) -> Rc<String> {
+        self.push_label(LabelContext::Case)
+    }
+
+    pub fn exit_switch(&mut self) {
+        while let Some(label) = self.labels.pop() {
+            match label.context {
+                LabelContext::Loop => unreachable!(),
+                LabelContext::Switch => break,
+                LabelContext::Case => {}
+            }
+        }
     }
 
     pub fn declare_function(
@@ -255,6 +300,18 @@ impl Environment {
 }
 
 impl Environment {
+    fn push_label(&mut self, context: LabelContext) -> Rc<String> {
+        let name_prefix = match context {
+            LabelContext::Loop => LOOP_LABEL,
+            LabelContext::Switch => SWITCH_LABEL,
+            LabelContext::Case => CASE_LABEL,
+        };
+        let name = make_name(name_prefix, self.labels.len());
+        let label = Label { name, context };
+        self.labels.push(label);
+        self.labels.last().map(|l| l.name.clone()).unwrap()
+    }
+
     fn resolve_function(&self, name: Rc<String>) -> Option<&Function> {
         for symbols in self.symbols.iter().rev() {
             if let Some(Symbol::Function(function)) = symbols.get(&name) {

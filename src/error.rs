@@ -22,6 +22,7 @@ pub enum Kind {
     NonConstantExpression,
     NonIntegerExpression,
     CannotAssignToConst(Rc<String>),
+    DuplicateCase,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -91,6 +92,7 @@ impl Display for Kind {
             Kind::CannotAssignToConst(name) => {
                 write!(f, "Cannot assign to const-qualified variable '{name}'")
             }
+            Kind::DuplicateCase => write!(f, "Duplicate case in switch statement"),
         }
     }
 }

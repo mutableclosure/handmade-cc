@@ -190,6 +190,9 @@ impl Lexer<'_> {
             "continue" => Token::Keyword(Keyword::Continue),
             "extern" => Token::Keyword(Keyword::Extern),
             "const" => Token::Keyword(Keyword::Const),
+            "switch" => Token::Keyword(Keyword::Switch),
+            "case" => Token::Keyword(Keyword::Case),
+            "default" => Token::Keyword(Keyword::Default),
             _ => Token::Identifier(identifier.into()),
         }
     }

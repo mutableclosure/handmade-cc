@@ -6,11 +6,18 @@ use crate::{
     },
     ir::{ExternalFunction, Function, Global, Instruction, Module, Type as IrType, Variable},
 };
-use alloc::{collections::btree_set::BTreeSet, rc::Rc, string::String, vec::Vec};
+use alloc::{
+    collections::btree_set::BTreeSet,
+    rc::Rc,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 const BREAK_LABEL: &str = "break";
 const CONTINUE_LABEL: &str = "continue";
 const POST_LABEL: &str = "post";
+const CONDITION_LABEL: &str = "condition";
+const SWITCH_VARIABLE_NAME: &str = "#switch#";
 
 #[derive(Clone, Debug)]
 pub struct Emitter;
@@ -94,7 +101,7 @@ fn emit_variables_in_block(
                 emit_variables_in_statement(statement, variables, names)
             }
             BlockItem::VariableDeclaration(declaration) => {
-                emit_variables_in_declaration(declaration, variables, names)
+                emit_variable(&declaration.name, declaration.r#type, variables, names);
             }
         }
     }
@@ -118,9 +125,19 @@ fn emit_variables_in_statement(
         }
         Statement::For(_, for_init, _, _, statement) => {
             if let Some(ForInit::Declaration(declaration)) = for_init {
-                emit_variables_in_declaration(declaration, variables, names);
+                emit_variable(&declaration.name, declaration.r#type, variables, names);
             }
             emit_variables_in_statement(statement, variables, names);
+        }
+        Statement::Switch(_, _, cases, _) => {
+            let temp_variable = Rc::new(SWITCH_VARIABLE_NAME.to_string());
+            emit_variable(&temp_variable, AstType::Int, variables, names);
+
+            for case in cases {
+                for statement in &case.statements {
+                    emit_variables_in_statement(statement, variables, names);
+                }
+            }
         }
         Statement::Return(_)
         | Statement::Expression(_)
@@ -130,18 +147,19 @@ fn emit_variables_in_statement(
     }
 }
 
-fn emit_variables_in_declaration(
-    declaration: &VariableDeclaration,
+fn emit_variable(
+    name: &Rc<String>,
+    r#type: AstType,
     variables: &mut Vec<Variable>,
     names: &mut BTreeSet<Rc<String>>,
 ) {
-    if !names.contains(&declaration.name) {
+    if !names.contains(name) {
         let variable = Variable {
-            name: declaration.name.clone(),
-            r#type: declaration.r#type.into(),
+            name: name.clone(),
+            r#type: r#type.into(),
         };
         variables.push(variable);
-        names.insert(declaration.name.clone());
+        names.insert(name.clone());
     }
 }
 
@@ -249,6 +267,59 @@ fn emit_statement(statement: Statement, instructions: &mut Vec<Instruction>) {
 
             instructions.push(Instruction::Branch(post_label));
             emit_loop_end(instructions);
+        }
+        Statement::Switch(label, value, cases, default) => {
+            let temp_variable = Rc::new(SWITCH_VARIABLE_NAME.to_string());
+            emit_expression(value, instructions);
+            instructions.push(Instruction::LocalSet(temp_variable.clone()));
+
+            let break_label = emit_label(&label, BREAK_LABEL);
+            instructions.push(Instruction::Block(break_label.clone()));
+
+            for case in cases.iter().rev() {
+                instructions.push(Instruction::Block(case.label.clone()));
+            }
+
+            let condition_label = emit_label(&label, CONDITION_LABEL);
+            instructions.push(Instruction::Block(condition_label.clone()));
+
+            for (index, case) in cases.iter().enumerate() {
+                if Some(index as i32) == default {
+                    continue;
+                }
+
+                instructions.push(Instruction::LocalGet(temp_variable.clone()));
+                instructions.push(Instruction::PushConstant(case.value));
+                instructions.push(Instruction::Eq);
+                instructions.push(Instruction::BranchIf(if index == 0 {
+                    condition_label.clone()
+                } else {
+                    cases[index - 1].label.clone()
+                }));
+            }
+
+            if !cases.is_empty() {
+                instructions.push(Instruction::Branch(if let Some(default) = default {
+                    if default > 0 {
+                        cases[default as usize - 1].label.clone()
+                    } else {
+                        condition_label
+                    }
+                } else {
+                    break_label
+                }));
+            }
+
+            instructions.push(Instruction::End);
+
+            for case in cases {
+                for statement in case.statements {
+                    emit_statement(statement, instructions);
+                }
+                instructions.push(Instruction::End);
+            }
+
+            instructions.push(Instruction::End);
         }
         Statement::Null => instructions.push(Instruction::Nop),
     }

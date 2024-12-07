@@ -60,6 +60,7 @@ pub enum Statement {
         Option<Expression>,
         Box<Statement>,
     ),
+    Switch(Rc<String>, Expression, Vec<Case>, Option<i32>),
     Null,
 }
 
@@ -67,6 +68,13 @@ pub enum Statement {
 pub enum ForInit {
     Declaration(VariableDeclaration),
     Expression(Expression),
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Case {
+    pub label: Rc<String>,
+    pub value: i32,
+    pub statements: Vec<Statement>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

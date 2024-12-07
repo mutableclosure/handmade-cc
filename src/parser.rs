@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, ConstQualifier, Expression, ExpressionKind, ForInit,
+        BinaryOp, Block, BlockItem, Case, ConstQualifier, Expression, ExpressionKind, ForInit,
         FunctionBody, FunctionDeclaration, FunctionParameter, GlobalDeclaration, Lvalue, Program,
         Statement, Type, VariableDeclaration,
     },
@@ -11,7 +11,13 @@ use crate::{
     verifier::Verifier,
     Error, ErrorKind, Severity,
 };
-use alloc::{boxed::Box, collections::btree_map::BTreeMap, rc::Rc, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+    rc::Rc,
+    string::String,
+    vec::Vec,
+};
 
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
@@ -278,7 +284,7 @@ impl Parser<'_> {
                 self.lexer.next()?;
                 let label = self
                     .environment
-                    .loop_label()
+                    .loop_or_switch_label()
                     .ok_or_else(|| self.err(ErrorKind::BreakOutsideLoopOrSwitch))?;
                 self.expect_token(Token::Semicolon)?;
                 Ok(Statement::Break(label))
@@ -319,6 +325,69 @@ impl Parser<'_> {
                 let (label, body) = self.loop_body()?;
                 self.environment.unnest();
                 Ok(Statement::For(label, init, condition, post, body))
+            }
+            Some(Token::Keyword(Keyword::Switch)) => {
+                self.lexer.next()?;
+
+                let label = self.environment.enter_switch();
+                let condition = self.condition()?;
+                self.expect_token(Token::OpenBrace)?;
+                self.environment.nest();
+
+                let mut cases = Vec::new();
+                let mut case_values = BTreeSet::new();
+                let mut default = None;
+                let delimiters = BTreeSet::from_iter([
+                    Token::Keyword(Keyword::Case),
+                    Token::Keyword(Keyword::Default),
+                    Token::CloseBrace,
+                ]);
+
+                loop {
+                    let label = self.environment.case();
+                    let value = if self.peek_token(Token::Keyword(Keyword::Case))? {
+                        self.lexer.next()?;
+                        let value = self.expression(0)?;
+                        let value = self
+                            .evaluator
+                            .evaluate_i32(&value, &self.environment)
+                            .map_err(|e| self.err(e))?;
+                        if case_values.contains(&value) {
+                            return Err(self.err(ErrorKind::DuplicateCase));
+                        }
+                        case_values.insert(value);
+                        value
+                    } else if self.peek_token(Token::Keyword(Keyword::Default))? {
+                        if default.is_some() {
+                            return Err(self.err(ErrorKind::DuplicateCase));
+                        }
+                        self.lexer.next()?;
+                        default = Some(cases.len() as i32);
+                        0
+                    } else {
+                        break;
+                    };
+
+                    self.expect_token(Token::Colon)?;
+
+                    let mut statements = Vec::new();
+
+                    while !self.peek_token_in(&delimiters)? {
+                        statements.push(self.statement()?);
+                    }
+
+                    cases.push(Case {
+                        label,
+                        value,
+                        statements,
+                    })
+                }
+
+                self.expect_token(Token::CloseBrace)?;
+                self.environment.unnest();
+                self.environment.exit_switch();
+
+                Ok(Statement::Switch(label, condition, cases, default))
             }
             Some(Token::OpenBrace) => Ok(Statement::Compound(self.block()?)),
             _ => {
@@ -383,7 +452,7 @@ impl Parser<'_> {
 
         let mut items = Vec::new();
 
-        while self.peek_any_token_but(Token::CloseBrace)? {
+        while !self.peek_token(Token::CloseBrace)? {
             items.push(self.block_item()?);
         }
 
@@ -629,8 +698,11 @@ impl Parser<'_> {
         Ok(self.lexer.peek()?.is_some_and(|t| *t == expected_token))
     }
 
-    fn peek_any_token_but(&mut self, unexpected_token: Token) -> Result<bool, Error> {
-        Ok(self.lexer.peek()?.is_some_and(|t| *t != unexpected_token))
+    fn peek_token_in(&mut self, expected_tokens: &BTreeSet<Token>) -> Result<bool, Error> {
+        Ok(self
+            .lexer
+            .peek()?
+            .is_some_and(|t| expected_tokens.contains(t)))
     }
 
     fn expect_lvalue(&self, expression: &Expression) -> Result<(), Error> {

@@ -94,6 +94,14 @@ impl Verifier<'_> {
                 }
                 self.verify_calls_in_statement(statement)?;
             }
+            Statement::Switch(_, condition, cases, _) => {
+                self.verify_calls_in_expression(condition)?;
+                for case in cases {
+                    for statement in &case.statements {
+                        self.verify_calls_in_statement(statement)?;
+                    }
+                }
+            }
             Statement::Return(_)
             | Statement::Break(_)
             | Statement::Continue(_)

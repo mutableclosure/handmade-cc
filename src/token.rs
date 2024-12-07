@@ -1,7 +1,7 @@
 use alloc::{rc::Rc, string::String};
 use core::fmt::{self, Display, Formatter};
 
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
 pub enum Token {
     Identifier(Rc<String>),
     Constant(i32),
@@ -49,7 +49,7 @@ pub enum Token {
     Comma,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
 pub enum Keyword {
     Int,
     Void,
@@ -63,6 +63,9 @@ pub enum Keyword {
     Continue,
     Extern,
     Const,
+    Switch,
+    Case,
+    Default,
 }
 
 impl Display for Token {
@@ -131,6 +134,9 @@ impl Display for Keyword {
             Keyword::Continue => write!(f, "continue"),
             Keyword::Extern => write!(f, "extern"),
             Keyword::Const => write!(f, "const"),
+            Keyword::Switch => write!(f, "switch"),
+            Keyword::Case => write!(f, "case"),
+            Keyword::Default => write!(f, "default"),
         }
     }
 }
