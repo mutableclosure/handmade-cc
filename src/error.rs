@@ -23,6 +23,7 @@ pub enum Kind {
     NonIntegerExpression,
     CannotAssignToConst(Rc<String>),
     DuplicateCase,
+    AssemblerError(String),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -93,6 +94,7 @@ impl Display for Kind {
                 write!(f, "Cannot assign to const-qualified variable '{name}'")
             }
             Kind::DuplicateCase => write!(f, "Duplicate case in switch statement"),
+            Kind::AssemblerError(error) => write!(f, "{error}"),
         }
     }
 }

@@ -40,8 +40,8 @@ fn compile(file_name: &str, source: &str) -> String {
 fn wat_to_binary(wat: &str) -> Vec<u8> {
     #[cfg(feature = "binary-output")]
     {
-        wat::parse_str(wat).unwrap_or_else(|error| {
-            eprintln!("Error compiling wat to binary: {error}",);
+        Compiler.assemble(wat).unwrap_or_else(|e| {
+            eprintln!("Error compiling wat to binary: {e}",);
             process::exit(1);
         })
     }
