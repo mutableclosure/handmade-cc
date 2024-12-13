@@ -1,5 +1,3 @@
-use alloc::string::ToString;
-
 use crate::{
     ast::{
         Block, BlockItem, Expression, ExpressionKind, ForInit, FunctionBody, FunctionDeclaration,
@@ -8,6 +6,7 @@ use crate::{
     environment::Environment,
     Error, ErrorKind, Severity,
 };
+use alloc::string::ToString;
 
 const MAIN_FUNCTION_NAME: &str = "main";
 
@@ -51,7 +50,11 @@ impl Verifier<'_> {
         for item in &block.items {
             match item {
                 BlockItem::Statement(statement) => self.verify_calls_in_statement(statement)?,
-                BlockItem::VariableDeclaration(_) => {}
+                BlockItem::VariableDeclaration(declaration) => {
+                    if let Some(init) = declaration.init.as_ref() {
+                        self.verify_calls_in_expression(init)?;
+                    }
+                }
             }
         }
 
@@ -102,23 +105,52 @@ impl Verifier<'_> {
                     }
                 }
             }
-            Statement::Return(_)
-            | Statement::Break(_)
-            | Statement::Continue(_)
-            | Statement::Null => {}
+            Statement::Return(expression) => {
+                if let Some(expression) = expression {
+                    self.verify_calls_in_expression(expression)?;
+                }
+            }
+            Statement::Break(_) | Statement::Continue(_) | Statement::Null => {}
         }
 
         Ok(())
     }
 
     fn verify_calls_in_expression(&self, expression: &Expression) -> Result<(), Error> {
-        if let ExpressionKind::FunctionCall(name, _) = &expression.kind {
-            if !self.environment.is_function_defined(name.clone()) {
-                return Err(self.err(ErrorKind::UndefinedFunction(name.clone())));
+        match &expression.kind {
+            ExpressionKind::BitwiseComplement(expression)
+            | ExpressionKind::Negation(expression)
+            | ExpressionKind::Not(expression)
+            | ExpressionKind::PrefixIncrement(expression)
+            | ExpressionKind::PrefixDecrement(expression)
+            | ExpressionKind::PostfixIncrement(expression)
+            | ExpressionKind::PostfixDecrement(expression) => {
+                self.verify_calls_in_expression(expression)
             }
-        }
+            ExpressionKind::BinaryOp(_, left, right) => {
+                self.verify_calls_in_expression(left)?;
+                self.verify_calls_in_expression(right)
+            }
+            ExpressionKind::Conditional(left, middle, right) => {
+                self.verify_calls_in_expression(left)?;
+                self.verify_calls_in_expression(middle)?;
+                self.verify_calls_in_expression(right)
+            }
+            ExpressionKind::FunctionCall(name, arguments) => {
+                if !self.environment.is_function_defined(name.clone()) {
+                    return Err(self.err(ErrorKind::UndefinedFunction(name.clone())));
+                }
 
-        Ok(())
+                for arg in arguments {
+                    self.verify_calls_in_expression(arg)?;
+                }
+
+                Ok(())
+            }
+            ExpressionKind::Constant(_)
+            | ExpressionKind::Global(_, _)
+            | ExpressionKind::Variable(_, _) => Ok(()),
+        }
     }
 
     fn err(&self, kind: ErrorKind) -> Error {
