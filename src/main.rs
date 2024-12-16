@@ -95,7 +95,7 @@ fn read_source_file(path: &Path) -> String {
 
 fn exit_on_invalid_args(args: &[String]) -> ! {
     eprintln!(
-        "Usage:\n  {} [--wat-only] <source_file.c> <o.{{wasm | wat}}>",
+        "Usage:\n  {} [--wat-only] <source_file.c> <output.{{wasm | wat}}>",
         args.first().unwrap_or(&"handmade-cc".to_string())
     );
     process::exit(1);
