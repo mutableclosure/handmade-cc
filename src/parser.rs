@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        BinaryOp, Block, BlockItem, Case, ConstQualifier, Expression, ExpressionKind, ForInit,
-        FunctionBody, FunctionDeclaration, FunctionParameter, GlobalDeclaration, Lvalue, Program,
-        Statement, Type, VariableDeclaration,
+        BinaryOp, Block, BlockItem, Case, ConstQualifier, Datum, Expression, ExpressionKind,
+        ForInit, FunctionBody, FunctionDeclaration, FunctionParameter, GlobalDeclaration, Lvalue,
+        Program, Statement, Type, VariableDeclaration,
     },
     environment::{Environment, FunctionDeclarationType, GlobalDeclarationType, Symbol},
     evaluator::Evaluator,
@@ -18,6 +18,9 @@ use alloc::{
     string::String,
     vec::Vec,
 };
+
+const PRAGMA_DIRECTIVE: &str = "pragma";
+const DATA_DIRECTIVE: &str = "data";
 
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
@@ -50,6 +53,7 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) -> Result<Program, Error> {
         let mut globals = BTreeMap::new();
         let mut functions = Vec::new();
+        let mut data = Vec::new();
 
         while let Some(token) = self.lexer.next()? {
             match token {
@@ -85,6 +89,7 @@ impl<'a> Parser<'a> {
                         functions.push(f);
                     }
                 }
+                Token::NumberSign => data.push(self.directive()?),
                 _ => return Err(self.err(ErrorKind::UnknownType(token))),
             }
         }
@@ -94,6 +99,7 @@ impl<'a> Parser<'a> {
         Ok(Program {
             globals: globals.into_values().collect(),
             functions,
+            data,
         })
     }
 }
@@ -108,12 +114,7 @@ impl Parser<'_> {
         let has_init = self.peek_token(Token::EqualSign)?;
         let init = if has_init {
             self.lexer.next()?;
-            let expression = self.expression(0)?;
-            Some(
-                self.evaluator
-                    .evaluate_i32(&expression, &self.environment)
-                    .map_err(|e| self.err(e))?,
-            )
+            Some(self.expect_constant()?)
         } else {
             None
         };
@@ -245,6 +246,16 @@ impl Parser<'_> {
         Ok(parameters)
     }
 
+    fn directive(&mut self) -> Result<Datum, Error> {
+        self.expect_directive(PRAGMA_DIRECTIVE)?;
+        self.expect_directive(DATA_DIRECTIVE)?;
+
+        let address = self.expect_constant()?;
+        let bytes = self.expect_string()?;
+
+        Ok(Datum { address, bytes })
+    }
+
     fn statement(&mut self) -> Result<Statement, Error> {
         match self.lexer.peek()? {
             Some(Token::Keyword(Keyword::Return)) => {
@@ -347,11 +358,7 @@ impl Parser<'_> {
                     let label = self.environment.case();
                     let value = if self.peek_token(Token::Keyword(Keyword::Case))? {
                         self.lexer.next()?;
-                        let value = self.expression(0)?;
-                        let value = self
-                            .evaluator
-                            .evaluate_i32(&value, &self.environment)
-                            .map_err(|e| self.err(e))?;
+                        let value = self.expect_constant()?;
                         if case_values.contains(&value) {
                             return Err(self.err(ErrorKind::DuplicateCase));
                         }
@@ -671,14 +678,41 @@ impl Parser<'_> {
         }
     }
 
+    fn expect_directive(&mut self, directive: &str) -> Result<(), Error> {
+        let identifier = self.expect_identifier()?;
+
+        if identifier.as_str() != directive {
+            Err(self.err(ErrorKind::InvalidDirective(identifier)))
+        } else {
+            Ok(())
+        }
+    }
+
     fn expect_identifier(&mut self) -> Result<Rc<String>, Error> {
         self.lexer.next()?.map_or_else(
             || Err(self.err(ErrorKind::ExpectedIdentifier(None))),
             |token| match token {
-                Token::Identifier(identifier) => Ok(identifier.clone()),
+                Token::Identifier(identifier) => Ok(identifier),
                 _ => Err(self.err(ErrorKind::ExpectedIdentifier(Some(token)))),
             },
         )
+    }
+
+    fn expect_string(&mut self) -> Result<Vec<u8>, Error> {
+        self.lexer.next()?.map_or_else(
+            || Err(self.err(ErrorKind::ExpectedString(None))),
+            |token| match token {
+                Token::String(identifier) => Ok(identifier),
+                _ => Err(self.err(ErrorKind::ExpectedString(Some(token)))),
+            },
+        )
+    }
+
+    fn expect_constant(&mut self) -> Result<i32, Error> {
+        let value = self.expression(0)?;
+        self.evaluator
+            .evaluate_i32(&value, &self.environment)
+            .map_err(|e| self.err(e))
     }
 
     fn expect_token(&mut self, expected_token: Token) -> Result<(), Error> {

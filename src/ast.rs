@@ -4,6 +4,7 @@ use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 pub struct Program {
     pub globals: Vec<GlobalDeclaration>,
     pub functions: Vec<FunctionDeclaration>,
+    pub data: Vec<Datum>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -160,4 +161,10 @@ pub enum ConstQualifier {
 pub enum Type {
     Int,
     Void,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Datum {
+    pub address: i32,
+    pub bytes: Vec<u8>,
 }

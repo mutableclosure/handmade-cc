@@ -104,7 +104,20 @@ fn test_{name}() -> Result<(), String> {{
             file,
             r##"    let (return_code, stdout) = build_and_run(source_code)?;
     assert_eq!(return_code as u8, {expected_return_code}, "Unexpected return code");
-    assert_eq!(stdout, "{expected_stdout}", "Unexpected stdout");"##,
+    assert_eq!(stdout, "{}", "Unexpected stdout");"##,
+            {
+                let mut string = String::new();
+                for c in expected_stdout.chars() {
+                    match c {
+                        '\r' => string.push_str("\\r"),
+                        '\"' => string.push_str("\\\""),
+                        '\'' => string.push_str("\\'"),
+                        '\\' => string.push_str("\\\\"),
+                        _ => string.push(c),
+                    }
+                }
+                string
+            }
         )
         .unwrap();
     } else {

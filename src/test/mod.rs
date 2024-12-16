@@ -1,12 +1,13 @@
 use handmade_cc::Compiler;
 use std::time::Instant;
-use wasmi::{Caller, Engine, Func, Linker, Memory, MemoryType, Module, Store};
+use wasmi::{AsContext, Caller, Engine, Func, Linker, Memory, MemoryType, Module, Store};
 
 const MEMORY_PAGES: u32 = 1;
 const ENV_MODULE: &str = "env";
 const MEMORY_NAME: &str = "memory";
 const MAIN_NAME: &str = "main";
 const PUT_CHAR_NAME: &str = "putchar";
+const READ_U8_NAME: &str = "read_u8";
 const MAX_EXECUTION_TIME: f64 = 2.0;
 
 #[cfg(feature = "std")]
@@ -17,6 +18,7 @@ include!(concat!(env!("OUT_DIR"), "/generated_tests.rs"));
 #[derive(Debug, Default)]
 struct State {
     stdout: Vec<i32>,
+    memory: Option<Memory>,
 }
 
 fn build_and_run(source_code: &str) -> Result<(i32, String), String> {
@@ -44,8 +46,12 @@ fn build_and_run(source_code: &str) -> Result<(i32, String), String> {
     let memory = Memory::new(&mut store, memory_type).unwrap();
     let mut linker = <Linker<State>>::new(&engine);
     linker.define(ENV_MODULE, MEMORY_NAME, memory).unwrap();
+    store.data_mut().memory = Some(memory);
     linker
         .define(ENV_MODULE, PUT_CHAR_NAME, Func::wrap(&mut store, putchar))
+        .unwrap();
+    linker
+        .define(ENV_MODULE, READ_U8_NAME, Func::wrap(&mut store, read_u8))
         .unwrap();
     let instance = linker
         .instantiate(&mut store, &module)
@@ -77,4 +83,10 @@ fn putchar(mut caller: Caller<'_, State>, c: i32) -> i32 {
     print!("{}", char::from_u32(c as u32).unwrap_or_default());
     caller.data_mut().stdout.push(c);
     c
+}
+
+fn read_u8(caller: Caller<'_, State>, address: i32) -> i32 {
+    let memory = caller.data().memory.unwrap();
+    let data = memory.data(caller.as_context());
+    data.get(address as usize).copied().unwrap_or_default() as i32
 }

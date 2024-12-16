@@ -29,6 +29,14 @@
   "literals/valid/hex_upper_case.c": {
     "return_code": 239
   },
+  "pragma/valid/data.c": {
+    "return_code": 0,
+    "stdout": "Hello, world!\n"
+  },
+  "pragma/valid/escape_sequences.c": {
+    "return_code": 0,
+    "stdout": "\t\n\r\"'\\ "
+  },
   "chapter_1/valid/multi_digit.c": {
     "return_code": 100
   },

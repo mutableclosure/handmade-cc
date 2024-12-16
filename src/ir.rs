@@ -5,6 +5,7 @@ pub struct Module {
     pub globals: Vec<Global>,
     pub external_functions: Vec<ExternalFunction>,
     pub functions: Vec<Function>,
+    pub data: Vec<Datum>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -81,4 +82,10 @@ pub enum Instruction {
 pub enum Type {
     Int32,
     Void,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Datum {
+    pub address: i32,
+    pub bytes: Vec<u8>,
 }

@@ -4,7 +4,9 @@ use crate::{
         FunctionBody, FunctionParameter, Lvalue, Program, Statement, Type as AstType,
         VariableDeclaration,
     },
-    ir::{ExternalFunction, Function, Global, Instruction, Module, Type as IrType, Variable},
+    ir::{
+        Datum, ExternalFunction, Function, Global, Instruction, Module, Type as IrType, Variable,
+    },
 };
 use alloc::{
     collections::btree_set::BTreeSet,
@@ -79,6 +81,14 @@ impl Emitter {
             globals,
             functions,
             external_functions,
+            data: program
+                .data
+                .into_iter()
+                .map(|d| Datum {
+                    address: d.address,
+                    bytes: d.bytes,
+                })
+                .collect(),
         }
     }
 }

@@ -23,6 +23,11 @@ pub enum Kind {
     NonIntegerExpression,
     CannotAssignToConst(Rc<String>),
     DuplicateCase,
+    InvalidDirective(Rc<String>),
+    UnterminatedString,
+    InvalidCharacter(char),
+    InvalidEscapeSequence,
+    ExpectedString(Option<Token>),
     AssemblerError(String),
 }
 
@@ -94,6 +99,14 @@ impl Display for Kind {
                 write!(f, "Cannot assign to const-qualified variable '{name}'")
             }
             Kind::DuplicateCase => write!(f, "Duplicate case in switch statement"),
+            Kind::InvalidDirective(name) => write!(f, "Invalid directive: '{name}'"),
+            Kind::UnterminatedString => write!(f, "Unterminated string"),
+            Kind::InvalidCharacter(c) => write!(f, "Invalid character: '{c}'"),
+            Kind::InvalidEscapeSequence => write!(f, "Invalid escape sequence"),
+            Kind::ExpectedString(found) => {
+                write!(f, "Expected string")?;
+                write_found(f, found)
+            }
             Kind::AssemblerError(error) => write!(f, "{error}"),
         }
     }

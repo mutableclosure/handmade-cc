@@ -2,7 +2,7 @@ use crate::{
     token::{Keyword, Token},
     Error, ErrorKind, Severity,
 };
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 use core::{iter::Peekable, str::Chars};
 
 #[derive(Clone, Debug)]
@@ -51,12 +51,12 @@ impl Lexer<'_> {
                 '0' if self.source.next_if_eq(&'x').is_some()
                     || self.source.next_if_eq(&'X').is_some() =>
                 {
-                    return Ok(Some(self.hex_constant()?))
+                    return Ok(Some(Token::Constant(self.hex_constant()?)))
                 }
                 '0' if self.source.next_if_eq(&'b').is_some()
                     || self.source.next_if_eq(&'B').is_some() =>
                 {
-                    return Ok(Some(self.binary_constant()?))
+                    return Ok(Some(Token::Constant(self.binary_constant()?)))
                 }
                 _ if c.is_ascii_digit() => return Ok(Some(self.decimal_constant(c)?)),
                 '/' if self.source.next_if_eq(&'/').is_some() => self.ignore_line(),
@@ -142,6 +142,8 @@ impl Lexer<'_> {
                 '?' => return Ok(Some(Token::QuestionMark)),
                 ':' => return Ok(Some(Token::Colon)),
                 ',' => return Ok(Some(Token::Comma)),
+                '#' => return Ok(Some(Token::NumberSign)),
+                '\"' => return Ok(Some(self.string()?)),
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }
@@ -197,11 +199,11 @@ impl Lexer<'_> {
         }
     }
 
-    fn hex_constant(&mut self) -> Result<Token, Error> {
+    fn hex_constant(&mut self) -> Result<i32, Error> {
         self.integer_constant(16, |c| c.is_ascii_hexdigit())
     }
 
-    fn binary_constant(&mut self) -> Result<Token, Error> {
+    fn binary_constant(&mut self) -> Result<i32, Error> {
         self.integer_constant(2, |c| c == '0' || c == '1')
     }
 
@@ -224,10 +226,10 @@ impl Lexer<'_> {
         &mut self,
         base: u32,
         included: F,
-    ) -> Result<Token, Error> {
+    ) -> Result<i32, Error> {
         let mut string = String::new();
 
-        while let Some(c) = self.source.next_if(|c| included(*c)) {
+        while let Some(c) = self.source.next_if(|&c| included(c)) {
             string.push(c);
         }
 
@@ -238,7 +240,39 @@ impl Lexer<'_> {
         let value = i32::from_str_radix(&string, base)
             .map_err(|_| self.err(ErrorKind::ConstantTooLarge))?;
 
-        Ok(Token::Constant(value))
+        Ok(value)
+    }
+
+    fn string(&mut self) -> Result<Token, Error> {
+        let mut data = Vec::new();
+
+        while let Some(c) = self.source.next_if(|&c| c != '"') {
+            match c {
+                '\\' => match self.source.next() {
+                    Some('t') => data.push(b'\t'),
+                    Some('n') => data.push(b'\n'),
+                    Some('r') => data.push(b'\r'),
+                    Some('\"') => data.push(b'\"'),
+                    Some('\'') => data.push(b'\''),
+                    Some('\\') => data.push(b'\\'),
+                    Some('x') => {
+                        let constant = self.hex_constant()?;
+                        let value = u8::try_from(constant)
+                            .map_err(|_| self.err(ErrorKind::ConstantTooLarge))?;
+                        data.push(value);
+                    }
+                    Some(_) | None => return Err(self.err(ErrorKind::InvalidEscapeSequence)),
+                },
+                _ if c.is_ascii() => data.push(c as u8),
+                _ => return Err(self.err(ErrorKind::InvalidCharacter(c))),
+            }
+        }
+
+        if matches!(self.source.next(), Some('"')) {
+            Ok(Token::String(data))
+        } else {
+            Err(self.err(ErrorKind::UnterminatedString))
+        }
     }
 
     fn err(&self, kind: ErrorKind) -> Error {

@@ -1,10 +1,11 @@
-use alloc::{rc::Rc, string::String};
+use alloc::{rc::Rc, string::String, vec::Vec};
 use core::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
 pub enum Token {
     Identifier(Rc<String>),
     Constant(i32),
+    String(Vec<u8>),
     Keyword(Keyword),
     OpenParenthesis,
     CloseParenthesis,
@@ -47,6 +48,7 @@ pub enum Token {
     QuestionMark,
     Colon,
     Comma,
+    NumberSign,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
@@ -73,6 +75,9 @@ impl Display for Token {
         match self {
             Token::Identifier(identifier) => write!(f, "{identifier}"),
             Token::Constant(value) => write!(f, "{value}"),
+            Token::String(value) => {
+                write!(f, "\"{}\"", data_to_string(value))
+            }
             Token::Keyword(keyword) => write!(f, "{keyword}"),
             Token::OpenParenthesis => write!(f, "("),
             Token::CloseParenthesis => write!(f, ")"),
@@ -115,6 +120,7 @@ impl Display for Token {
             Token::QuestionMark => write!(f, "?"),
             Token::Colon => write!(f, ":"),
             Token::Comma => write!(f, ","),
+            Token::NumberSign => write!(f, "#"),
         }
     }
 }
@@ -139,4 +145,12 @@ impl Display for Keyword {
             Keyword::Default => write!(f, "default"),
         }
     }
+}
+
+fn data_to_string(data: &[u8]) -> String {
+    data.iter()
+        .map(|&c| c as char)
+        .collect::<String>()
+        .replace('\n', "\\n")
+        .replace('\t', "  ")
 }

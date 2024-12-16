@@ -1,6 +1,6 @@
-use crate::ir::{ExternalFunction, Function, Global, Instruction, Module, Type};
+use crate::ir::{Datum, ExternalFunction, Function, Global, Instruction, Module, Type};
 use alloc::string::{String, ToString};
-use core::mem;
+use core::{fmt::Write, mem};
 
 const DEFAULT_EXTERNAL_MODULE: &str = "env";
 const PARAM_VARIABLE_TYPE: &str = "param";
@@ -24,6 +24,11 @@ impl Wat {
 
         module.external_functions.into_iter().for_each(|function| {
             self.generate_external_function(function);
+            self.out.push('\n');
+        });
+
+        module.data.into_iter().for_each(|datum| {
+            self.generate_datum(datum);
             self.out.push('\n');
         });
 
@@ -52,6 +57,33 @@ impl Wat {
 }
 
 impl Wat {
+    fn generate_datum(&mut self, datum: Datum) {
+        self.out.push_str(r#"  (data  (i32.const "#);
+        self.out.push_str(&datum.address.to_string());
+        self.out.push_str(r#") ""#);
+
+        for byte in datum.bytes {
+            match byte {
+                b' ' => self.out.push(' '),
+                b'\t' => self.out.push_str("\\t"),
+                b'\n' => self.out.push_str("\\n"),
+                b'\r' => self.out.push_str("\\r"),
+                b'\"' => self.out.push_str("\\\""),
+                b'\'' => self.out.push_str("\\'"),
+                b'\\' => self.out.push_str("\\\\"),
+                _ if byte.is_ascii_graphic() => self.out.push(byte as char),
+                _ => {
+                    self.out.push('\\');
+                    let mut value = String::with_capacity(2);
+                    write!(&mut value, "{:02X}", byte).unwrap();
+                    self.out.push_str(&value);
+                }
+            }
+        }
+
+        self.out.push_str(r#"")"#);
+    }
+
     fn generate_global(&mut self, global: Global) {
         self.out.push_str(r#"  (global $"#);
         self.out.push_str(&global.name);
