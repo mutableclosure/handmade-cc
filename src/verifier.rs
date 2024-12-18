@@ -156,6 +156,7 @@ impl Verifier<'_> {
     fn err(&self, kind: ErrorKind) -> Error {
         Error {
             line_number: 0,
+            column: 0,
             kind,
             severity: Severity::Error,
         }

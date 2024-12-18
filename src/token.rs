@@ -2,7 +2,14 @@ use alloc::{rc::Rc, string::String, vec::Vec};
 use core::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
-pub enum Token {
+pub struct Token {
+    pub line_number: usize,
+    pub column: usize,
+    pub kind: TokenKind,
+}
+
+#[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
+pub enum TokenKind {
     Identifier(Rc<String>),
     Constant(i32),
     String(Vec<u8>),
@@ -70,57 +77,57 @@ pub enum Keyword {
     Default,
 }
 
-impl Display for Token {
+impl Display for TokenKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Token::Identifier(identifier) => write!(f, "{identifier}"),
-            Token::Constant(value) => write!(f, "{value}"),
-            Token::String(value) => {
+            TokenKind::Identifier(identifier) => write!(f, "{identifier}"),
+            TokenKind::Constant(value) => write!(f, "{value}"),
+            TokenKind::String(value) => {
                 write!(f, "\"{}\"", data_to_string(value))
             }
-            Token::Keyword(keyword) => write!(f, "{keyword}"),
-            Token::OpenParenthesis => write!(f, "("),
-            Token::CloseParenthesis => write!(f, ")"),
-            Token::OpenBrace => write!(f, "{{"),
-            Token::CloseBrace => write!(f, "}}"),
-            Token::Semicolon => write!(f, ";"),
-            Token::Tilde => write!(f, "~"),
-            Token::Hyphen => write!(f, "-"),
-            Token::PlusSign => write!(f, "+"),
-            Token::Asterisk => write!(f, "*"),
-            Token::Slash => write!(f, "/"),
-            Token::Percent => write!(f, "%"),
-            Token::Ampersand => write!(f, "&"),
-            Token::Bar => write!(f, "|"),
-            Token::Circumflex => write!(f, "^"),
-            Token::TwoLessThanOps => write!(f, "<<"),
-            Token::TwoGreaterThanOps => write!(f, ">>"),
-            Token::ExclamationPoint => write!(f, ""),
-            Token::TwoAmpersands => write!(f, "&&"),
-            Token::TwoBars => write!(f, "||"),
-            Token::TwoEqualSigns => write!(f, "=="),
-            Token::NotEqualSign => write!(f, "!="),
-            Token::LessThanOp => write!(f, "<"),
-            Token::GreaterThanOp => write!(f, ">"),
-            Token::LessThanOrEqualToOp => write!(f, "<="),
-            Token::GreaterThanOrEqualToOp => write!(f, ">="),
-            Token::EqualSign => write!(f, "="),
-            Token::PlusEqualSign => write!(f, "+="),
-            Token::HyphenEqualSign => write!(f, "-="),
-            Token::AsteriskEqualSign => write!(f, "*="),
-            Token::SlashEqualSign => write!(f, "/="),
-            Token::PercentEqualSign => write!(f, "%="),
-            Token::AmpersandEqualSign => write!(f, "&="),
-            Token::BarEqualSign => write!(f, "|="),
-            Token::CircumflexEqualSign => write!(f, "^="),
-            Token::TwoLessThanOpsEqualSign => write!(f, "<<="),
-            Token::TwoGreaterThanOpsEqualSign => write!(f, ">>="),
-            Token::TwoPlusSigns => write!(f, "++"),
-            Token::TwoHyphens => write!(f, "--"),
-            Token::QuestionMark => write!(f, "?"),
-            Token::Colon => write!(f, ":"),
-            Token::Comma => write!(f, ","),
-            Token::NumberSign => write!(f, "#"),
+            TokenKind::Keyword(keyword) => write!(f, "{keyword}"),
+            TokenKind::OpenParenthesis => write!(f, "("),
+            TokenKind::CloseParenthesis => write!(f, ")"),
+            TokenKind::OpenBrace => write!(f, "{{"),
+            TokenKind::CloseBrace => write!(f, "}}"),
+            TokenKind::Semicolon => write!(f, ";"),
+            TokenKind::Tilde => write!(f, "~"),
+            TokenKind::Hyphen => write!(f, "-"),
+            TokenKind::PlusSign => write!(f, "+"),
+            TokenKind::Asterisk => write!(f, "*"),
+            TokenKind::Slash => write!(f, "/"),
+            TokenKind::Percent => write!(f, "%"),
+            TokenKind::Ampersand => write!(f, "&"),
+            TokenKind::Bar => write!(f, "|"),
+            TokenKind::Circumflex => write!(f, "^"),
+            TokenKind::TwoLessThanOps => write!(f, "<<"),
+            TokenKind::TwoGreaterThanOps => write!(f, ">>"),
+            TokenKind::ExclamationPoint => write!(f, ""),
+            TokenKind::TwoAmpersands => write!(f, "&&"),
+            TokenKind::TwoBars => write!(f, "||"),
+            TokenKind::TwoEqualSigns => write!(f, "=="),
+            TokenKind::NotEqualSign => write!(f, "!="),
+            TokenKind::LessThanOp => write!(f, "<"),
+            TokenKind::GreaterThanOp => write!(f, ">"),
+            TokenKind::LessThanOrEqualToOp => write!(f, "<="),
+            TokenKind::GreaterThanOrEqualToOp => write!(f, ">="),
+            TokenKind::EqualSign => write!(f, "="),
+            TokenKind::PlusEqualSign => write!(f, "+="),
+            TokenKind::HyphenEqualSign => write!(f, "-="),
+            TokenKind::AsteriskEqualSign => write!(f, "*="),
+            TokenKind::SlashEqualSign => write!(f, "/="),
+            TokenKind::PercentEqualSign => write!(f, "%="),
+            TokenKind::AmpersandEqualSign => write!(f, "&="),
+            TokenKind::BarEqualSign => write!(f, "|="),
+            TokenKind::CircumflexEqualSign => write!(f, "^="),
+            TokenKind::TwoLessThanOpsEqualSign => write!(f, "<<="),
+            TokenKind::TwoGreaterThanOpsEqualSign => write!(f, ">>="),
+            TokenKind::TwoPlusSigns => write!(f, "++"),
+            TokenKind::TwoHyphens => write!(f, "--"),
+            TokenKind::QuestionMark => write!(f, "?"),
+            TokenKind::Colon => write!(f, ":"),
+            TokenKind::Comma => write!(f, ","),
+            TokenKind::NumberSign => write!(f, "#"),
         }
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     environment::{Environment, FunctionDeclarationType, GlobalDeclarationType, Symbol},
     evaluator::Evaluator,
     lexer::Lexer,
-    token::{Keyword, Token},
+    token::{Keyword, Token, TokenKind},
     verifier::Verifier,
     Error, ErrorKind, Severity,
 };
@@ -27,6 +27,8 @@ pub struct Parser<'a> {
     lexer: Lexer<'a>,
     environment: Environment,
     evaluator: Evaluator,
+    line_number: usize,
+    column: usize,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -47,6 +49,8 @@ impl<'a> Parser<'a> {
             lexer: Lexer::new(source),
             environment: Environment::default(),
             evaluator: Evaluator,
+            line_number: 1,
+            column: 1,
         }
     }
 
@@ -56,10 +60,11 @@ impl<'a> Parser<'a> {
         let mut data = Vec::new();
 
         while let Some(token) = self.lexer.next()? {
-            match token {
-                Token::Keyword(Keyword::Int) => {
+            self.set_location(&token);
+            match token.kind {
+                TokenKind::Keyword(Keyword::Int) => {
                     let name = self.expect_identifier()?;
-                    if self.peek_token(Token::OpenParenthesis)? {
+                    if self.peek_token(TokenKind::OpenParenthesis)? {
                         if let Some(f) = self.function(name, Type::Int, DeclarationScope::Static)? {
                             functions.push(f)
                         }
@@ -70,27 +75,27 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-                Token::Keyword(Keyword::Void) => {
+                TokenKind::Keyword(Keyword::Void) => {
                     let name = self.expect_identifier()?;
                     if let Some(f) = self.function(name, Type::Void, DeclarationScope::Static)? {
                         functions.push(f)
                     }
                 }
-                Token::Keyword(Keyword::Const) => {
-                    self.expect_token(Token::Keyword(Keyword::Int))?;
+                TokenKind::Keyword(Keyword::Const) => {
+                    self.expect_token(TokenKind::Keyword(Keyword::Int))?;
                     let name = self.expect_identifier()?;
                     let global = self.global(name, Type::Int, ConstQualifier::Const)?;
                     if global.init.is_some() || !globals.contains_key(&global.name) {
                         globals.insert(global.name.clone(), global);
                     }
                 }
-                Token::Keyword(Keyword::Extern) => {
+                TokenKind::Keyword(Keyword::Extern) => {
                     if let Some(f) = self.extern_declaration()? {
                         functions.push(f);
                     }
                 }
-                Token::NumberSign => data.push(self.directive()?),
-                _ => return Err(self.err(ErrorKind::UnknownType(token))),
+                TokenKind::NumberSign => data.push(self.directive()?),
+                _ => return Err(self.err(ErrorKind::UnknownType(token.kind))),
             }
         }
 
@@ -111,7 +116,7 @@ impl Parser<'_> {
         r#type: Type,
         r#const: ConstQualifier,
     ) -> Result<GlobalDeclaration, Error> {
-        let has_init = self.peek_token(Token::EqualSign)?;
+        let has_init = self.peek_token(TokenKind::EqualSign)?;
         let init = if has_init {
             self.lexer.next()?;
             Some(self.expect_constant()?)
@@ -131,7 +136,7 @@ impl Parser<'_> {
             )
             .map_err(|kind| self.err(kind))?;
 
-        self.expect_token(Token::Semicolon)?;
+        self.expect_token(TokenKind::Semicolon)?;
 
         Ok(GlobalDeclaration {
             name,
@@ -143,13 +148,15 @@ impl Parser<'_> {
 
     fn extern_declaration(&mut self) -> Result<Option<FunctionDeclaration>, Error> {
         let token = self.lexer.next()?;
+        self.maybe_set_location(token.as_ref());
+        let token = token.map(|t| t.kind);
 
         match token {
-            Some(Token::Keyword(Keyword::Int)) => {
+            Some(TokenKind::Keyword(Keyword::Int)) => {
                 let name = self.expect_identifier()?;
                 self.function(name, Type::Int, DeclarationScope::Extern)
             }
-            Some(Token::Keyword(Keyword::Void)) => {
+            Some(TokenKind::Keyword(Keyword::Void)) => {
                 let name = self.expect_identifier()?;
                 self.function(name, Type::Void, DeclarationScope::Extern)
             }
@@ -170,11 +177,11 @@ impl Parser<'_> {
         let parameters = self.function_parameters()?;
         let declaration_type = match scope {
             DeclarationScope::Extern => {
-                self.expect_token(Token::Semicolon)?;
+                self.expect_token(TokenKind::Semicolon)?;
                 FunctionDeclarationType::ExternDeclaration
             }
             DeclarationScope::Static => {
-                if self.peek_token(Token::Semicolon)? {
+                if self.peek_token(TokenKind::Semicolon)? {
                     self.lexer.next()?;
                     FunctionDeclarationType::ForwardDeclaration
                 } else {
@@ -212,19 +219,19 @@ impl Parser<'_> {
 
     fn function_parameters(&mut self) -> Result<Vec<FunctionParameter>, Error> {
         let mut parameters = Vec::new();
-        self.expect_token(Token::OpenParenthesis)?;
+        self.expect_token(TokenKind::OpenParenthesis)?;
 
-        if self.peek_token(Token::Keyword(Keyword::Void))? {
+        if self.peek_token(TokenKind::Keyword(Keyword::Void))? {
             self.lexer.next()?;
         } else {
             loop {
-                let r#const = if self.peek_token(Token::Keyword(Keyword::Const))? {
+                let r#const = if self.peek_token(TokenKind::Keyword(Keyword::Const))? {
                     self.lexer.next()?;
                     ConstQualifier::Const
                 } else {
                     ConstQualifier::NonConst
                 };
-                self.expect_token(Token::Keyword(Keyword::Int))?;
+                self.expect_token(TokenKind::Keyword(Keyword::Int))?;
                 let name = self.expect_identifier()?;
                 let r#type = Type::Int;
                 parameters.push(FunctionParameter {
@@ -233,7 +240,7 @@ impl Parser<'_> {
                     r#const,
                 });
 
-                if !self.peek_token(Token::Comma)? {
+                if !self.peek_token(TokenKind::Comma)? {
                     break;
                 }
 
@@ -241,7 +248,7 @@ impl Parser<'_> {
             }
         }
 
-        self.expect_token(Token::CloseParenthesis)?;
+        self.expect_token(TokenKind::CloseParenthesis)?;
 
         Ok(parameters)
     }
@@ -257,8 +264,8 @@ impl Parser<'_> {
     }
 
     fn statement(&mut self) -> Result<Statement, Error> {
-        match self.lexer.peek()? {
-            Some(Token::Keyword(Keyword::Return)) => {
+        match self.lexer.peek()?.map(|t| &t.kind) {
+            Some(TokenKind::Keyword(Keyword::Return)) => {
                 self.lexer.next()?;
                 let function = self.environment.function().unwrap();
                 let expression = match function.return_type {
@@ -269,19 +276,19 @@ impl Parser<'_> {
                     }
                     Type::Void => None,
                 };
-                self.expect_token(Token::Semicolon)?;
+                self.expect_token(TokenKind::Semicolon)?;
                 Ok(Statement::Return(expression))
             }
-            Some(Token::Semicolon) => {
+            Some(TokenKind::Semicolon) => {
                 self.lexer.next()?;
                 Ok(Statement::Null)
             }
-            Some(Token::Keyword(Keyword::If)) => {
+            Some(TokenKind::Keyword(Keyword::If)) => {
                 self.lexer.next()?;
                 let condition = self.condition()?;
                 let then = self.statement()?.into();
 
-                let r#else = if self.peek_token(Token::Keyword(Keyword::Else))? {
+                let r#else = if self.peek_token(TokenKind::Keyword(Keyword::Else))? {
                     self.lexer.next()?;
                     Some(self.statement()?)
                 } else {
@@ -291,72 +298,74 @@ impl Parser<'_> {
 
                 Ok(Statement::If(condition, then, r#else))
             }
-            Some(Token::Keyword(Keyword::Break)) => {
-                self.lexer.next()?;
+            Some(TokenKind::Keyword(Keyword::Break)) => {
+                let token = self.lexer.next()?;
+                self.maybe_set_location(token.as_ref());
                 let label = self
                     .environment
                     .loop_or_switch_label()
                     .ok_or_else(|| self.err(ErrorKind::BreakOutsideLoopOrSwitch))?;
-                self.expect_token(Token::Semicolon)?;
+                self.expect_token(TokenKind::Semicolon)?;
                 Ok(Statement::Break(label))
             }
-            Some(Token::Keyword(Keyword::Continue)) => {
-                self.lexer.next()?;
+            Some(TokenKind::Keyword(Keyword::Continue)) => {
+                let token = self.lexer.next()?;
+                self.maybe_set_location(token.as_ref());
                 let label = self
                     .environment
                     .loop_label()
                     .ok_or_else(|| self.err(ErrorKind::ContinueOutsideLoop))?;
-                self.expect_token(Token::Semicolon)?;
+                self.expect_token(TokenKind::Semicolon)?;
                 Ok(Statement::Continue(label))
             }
-            Some(Token::Keyword(Keyword::While)) => {
+            Some(TokenKind::Keyword(Keyword::While)) => {
                 self.lexer.next()?;
                 let condition = self.condition()?;
                 let (label, body) = self.loop_body()?;
                 Ok(Statement::While(label, condition, body))
             }
-            Some(Token::Keyword(Keyword::Do)) => {
+            Some(TokenKind::Keyword(Keyword::Do)) => {
                 self.lexer.next()?;
                 let (label, body) = self.loop_body()?;
-                self.expect_token(Token::Keyword(Keyword::While))?;
+                self.expect_token(TokenKind::Keyword(Keyword::While))?;
                 let condition = self.condition()?;
-                self.expect_token(Token::Semicolon)?;
+                self.expect_token(TokenKind::Semicolon)?;
                 Ok(Statement::DoWhile(label, body, condition))
             }
-            Some(Token::Keyword(Keyword::For)) => {
+            Some(TokenKind::Keyword(Keyword::For)) => {
                 self.lexer.next()?;
                 self.environment.nest();
-                self.expect_token(Token::OpenParenthesis)?;
+                self.expect_token(TokenKind::OpenParenthesis)?;
                 let init = self.for_init()?;
-                let condition = self.maybe_expression(Token::Semicolon)?;
+                let condition = self.maybe_expression(TokenKind::Semicolon)?;
                 if let Some(e) = condition.as_ref() {
                     self.expect_int(e)?;
                 }
-                let post = self.maybe_expression(Token::CloseParenthesis)?;
+                let post = self.maybe_expression(TokenKind::CloseParenthesis)?;
                 let (label, body) = self.loop_body()?;
                 self.environment.unnest();
                 Ok(Statement::For(label, init, condition, post, body))
             }
-            Some(Token::Keyword(Keyword::Switch)) => {
+            Some(TokenKind::Keyword(Keyword::Switch)) => {
                 self.lexer.next()?;
 
                 let label = self.environment.enter_switch();
                 let condition = self.condition()?;
-                self.expect_token(Token::OpenBrace)?;
+                self.expect_token(TokenKind::OpenBrace)?;
                 self.environment.nest();
 
                 let mut cases = Vec::new();
                 let mut case_values = BTreeSet::new();
                 let mut default = None;
                 let delimiters = BTreeSet::from_iter([
-                    Token::Keyword(Keyword::Case),
-                    Token::Keyword(Keyword::Default),
-                    Token::CloseBrace,
+                    TokenKind::Keyword(Keyword::Case),
+                    TokenKind::Keyword(Keyword::Default),
+                    TokenKind::CloseBrace,
                 ]);
 
                 loop {
                     let label = self.environment.case();
-                    let value = if self.peek_token(Token::Keyword(Keyword::Case))? {
+                    let value = if self.peek_token(TokenKind::Keyword(Keyword::Case))? {
                         self.lexer.next()?;
                         let value = self.expect_constant()?;
                         if case_values.contains(&value) {
@@ -364,7 +373,7 @@ impl Parser<'_> {
                         }
                         case_values.insert(value);
                         value
-                    } else if self.peek_token(Token::Keyword(Keyword::Default))? {
+                    } else if self.peek_token(TokenKind::Keyword(Keyword::Default))? {
                         if default.is_some() {
                             return Err(self.err(ErrorKind::DuplicateCase));
                         }
@@ -375,7 +384,7 @@ impl Parser<'_> {
                         break;
                     };
 
-                    self.expect_token(Token::Colon)?;
+                    self.expect_token(TokenKind::Colon)?;
 
                     let mut statements = Vec::new();
 
@@ -390,52 +399,52 @@ impl Parser<'_> {
                     })
                 }
 
-                self.expect_token(Token::CloseBrace)?;
+                self.expect_token(TokenKind::CloseBrace)?;
                 self.environment.unnest();
                 self.environment.exit_switch();
 
                 Ok(Statement::Switch(label, condition, cases, default))
             }
-            Some(Token::OpenBrace) => Ok(Statement::Compound(self.block()?)),
+            Some(TokenKind::OpenBrace) => Ok(Statement::Compound(self.block()?)),
             _ => {
                 let expression = self.expression(0)?;
-                self.expect_token(Token::Semicolon)?;
+                self.expect_token(TokenKind::Semicolon)?;
                 Ok(Statement::Expression(expression))
             }
         }
     }
 
     fn condition(&mut self) -> Result<Expression, Error> {
-        self.expect_token(Token::OpenParenthesis)?;
+        self.expect_token(TokenKind::OpenParenthesis)?;
         let condition = self.expression(0)?;
         self.expect_int(&condition)?;
-        self.expect_token(Token::CloseParenthesis)?;
+        self.expect_token(TokenKind::CloseParenthesis)?;
         Ok(condition)
     }
 
     fn for_init(&mut self) -> Result<Option<ForInit>, Error> {
-        if self.peek_token(Token::Keyword(Keyword::Int))? {
+        if self.peek_token(TokenKind::Keyword(Keyword::Int))? {
             self.lexer.next()?;
             Ok(Some(ForInit::Declaration(
                 self.variable(ConstQualifier::NonConst)?,
             )))
-        } else if self.peek_token(Token::Keyword(Keyword::Const))? {
+        } else if self.peek_token(TokenKind::Keyword(Keyword::Const))? {
             self.lexer.next()?;
-            self.expect_token(Token::Keyword(Keyword::Int))?;
+            self.expect_token(TokenKind::Keyword(Keyword::Int))?;
             Ok(Some(ForInit::Declaration(
                 self.variable(ConstQualifier::Const)?,
             )))
-        } else if self.peek_token(Token::Semicolon)? {
+        } else if self.peek_token(TokenKind::Semicolon)? {
             self.lexer.next()?;
             Ok(None)
         } else {
             let expression = self.expression(0)?;
-            self.expect_token(Token::Semicolon)?;
+            self.expect_token(TokenKind::Semicolon)?;
             Ok(Some(ForInit::Expression(expression)))
         }
     }
 
-    fn maybe_expression(&mut self, terminator: Token) -> Result<Option<Expression>, Error> {
+    fn maybe_expression(&mut self, terminator: TokenKind) -> Result<Option<Expression>, Error> {
         Ok(if self.peek_token(terminator.clone())? {
             self.lexer.next()?;
             None
@@ -454,30 +463,30 @@ impl Parser<'_> {
     }
 
     fn block(&mut self) -> Result<Block, Error> {
-        self.expect_token(Token::OpenBrace)?;
+        self.expect_token(TokenKind::OpenBrace)?;
         self.environment.nest();
 
         let mut items = Vec::new();
 
-        while !self.peek_token(Token::CloseBrace)? {
+        while !self.peek_token(TokenKind::CloseBrace)? {
             items.push(self.block_item()?);
         }
 
-        self.expect_token(Token::CloseBrace)?;
+        self.expect_token(TokenKind::CloseBrace)?;
         self.environment.unnest();
 
         Ok(Block { items })
     }
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {
-        if self.peek_token(Token::Keyword(Keyword::Int))? {
+        if self.peek_token(TokenKind::Keyword(Keyword::Int))? {
             self.lexer.next()?;
             Ok(BlockItem::VariableDeclaration(
                 self.variable(ConstQualifier::NonConst)?,
             ))
-        } else if self.peek_token(Token::Keyword(Keyword::Const))? {
+        } else if self.peek_token(TokenKind::Keyword(Keyword::Const))? {
             self.lexer.next()?;
-            self.expect_token(Token::Keyword(Keyword::Int))?;
+            self.expect_token(TokenKind::Keyword(Keyword::Int))?;
             Ok(BlockItem::VariableDeclaration(
                 self.variable(ConstQualifier::Const)?,
             ))
@@ -494,7 +503,7 @@ impl Parser<'_> {
             .declare_variable(identifier, r#const)
             .map_err(|kind| self.err(kind))?;
 
-        let init = if self.peek_token(Token::EqualSign)? {
+        let init = if self.peek_token(TokenKind::EqualSign)? {
             self.lexer.next()?;
             let expression = self.expression(0)?;
             self.expect_int(&expression)?;
@@ -503,7 +512,7 @@ impl Parser<'_> {
             None
         };
 
-        self.expect_token(Token::Semicolon)?;
+        self.expect_token(TokenKind::Semicolon)?;
 
         Ok(VariableDeclaration {
             name,
@@ -517,7 +526,12 @@ impl Parser<'_> {
         let mut left = self.factor()?;
         let mut token = self.lexer.peek()?;
 
-        while let Some(op) = token.and_then(op) {
+        if let Some(token) = token {
+            self.line_number = token.line_number;
+            self.column = token.column;
+        }
+
+        while let Some(op) = token.map(|t| &t.kind).and_then(op) {
             let precedence = precedence(op);
 
             if precedence < min_precedence {
@@ -543,7 +557,7 @@ impl Parser<'_> {
                 Op::Conditional => {
                     self.expect_int(&left)?;
                     let middle = self.expression(0)?;
-                    self.expect_token(Token::Colon)?;
+                    self.expect_token(TokenKind::Colon)?;
                     let right = self.expression(precedence)?;
                     let r#type = match (middle.r#type, right.r#type) {
                         (Type::Int, Type::Int) => Type::Int,
@@ -559,15 +573,26 @@ impl Parser<'_> {
             }
 
             token = self.lexer.peek()?;
+
+            if let Some(token) = token {
+                self.line_number = token.line_number;
+                self.column = token.column;
+            }
         }
 
         Ok(left)
     }
 
     fn factor(&mut self) -> Result<Expression, Error> {
-        match self.lexer.next()? {
-            Some(Token::Constant(value)) => Ok(Expression::int(ExpressionKind::Constant(value))),
-            Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoPlusSigns)? => {
+        let token = self.lexer.next()?;
+        self.maybe_set_location(token.as_ref());
+        match token.map(|t| t.kind) {
+            Some(TokenKind::Constant(value)) => {
+                Ok(Expression::int(ExpressionKind::Constant(value)))
+            }
+            Some(TokenKind::Identifier(identifier))
+                if self.peek_token(TokenKind::TwoPlusSigns)? =>
+            {
                 self.lexer.next()?;
                 self.environment
                     .resolve_lvalue(identifier)
@@ -577,7 +602,9 @@ impl Parser<'_> {
                     .map(ExpressionKind::PostfixIncrement)
                     .map(Expression::int)
             }
-            Some(Token::Identifier(identifier)) if self.peek_token(Token::TwoHyphens)? => {
+            Some(TokenKind::Identifier(identifier))
+                if self.peek_token(TokenKind::TwoHyphens)? =>
+            {
                 self.lexer.next()?;
                 self.environment
                     .resolve_lvalue(identifier)
@@ -587,45 +614,45 @@ impl Parser<'_> {
                     .map(ExpressionKind::PostfixDecrement)
                     .map(Expression::int)
             }
-            Some(Token::Identifier(identifier)) => self.symbol(identifier),
-            Some(Token::TwoPlusSigns) => {
+            Some(TokenKind::Identifier(identifier)) => self.symbol(identifier),
+            Some(TokenKind::TwoPlusSigns) => {
                 let variable = self.factor()?;
                 self.expect_lvalue(&variable)?;
                 let kind = ExpressionKind::PrefixIncrement(variable.into());
                 Ok(Expression::int(kind))
             }
-            Some(Token::TwoHyphens) => {
+            Some(TokenKind::TwoHyphens) => {
                 let variable = self.factor()?;
                 self.expect_lvalue(&variable)?;
                 let kind = ExpressionKind::PrefixDecrement(variable.into());
                 Ok(Expression::int(kind))
             }
-            Some(Token::Tilde) => self
+            Some(TokenKind::Tilde) => self
                 .factor()
                 .map(Box::new)
                 .map(ExpressionKind::BitwiseComplement)
                 .map(Expression::int),
-            Some(Token::Hyphen) => self
+            Some(TokenKind::Hyphen) => self
                 .factor()
                 .map(Box::new)
                 .map(ExpressionKind::Negation)
                 .map(Expression::int),
-            Some(Token::ExclamationPoint) => self
+            Some(TokenKind::ExclamationPoint) => self
                 .factor()
                 .map(Box::new)
                 .map(ExpressionKind::Not)
                 .map(Expression::int),
-            Some(Token::OpenParenthesis) => {
+            Some(TokenKind::OpenParenthesis) => {
                 let expression = self.expression(0)?;
                 let expression = self
-                    .expect_token(Token::CloseParenthesis)
+                    .expect_token(TokenKind::CloseParenthesis)
                     .map(|()| expression)?;
                 if self.expect_lvalue(&expression).is_ok() {
-                    if self.peek_token(Token::TwoPlusSigns)? {
+                    if self.peek_token(TokenKind::TwoPlusSigns)? {
                         self.lexer.next()?;
                         let kind = ExpressionKind::PostfixIncrement(expression.into());
                         return Ok(Expression::int(kind));
-                    } else if self.peek_token(Token::TwoHyphens)? {
+                    } else if self.peek_token(TokenKind::TwoHyphens)? {
                         self.lexer.next()?;
                         let kind = ExpressionKind::PostfixDecrement(expression.into());
                         return Ok(Expression::int(kind));
@@ -653,7 +680,7 @@ impl Parser<'_> {
             Symbol::Function(function) => {
                 let parameters = function.parameters.values().copied().collect::<Vec<_>>();
                 let r#type = function.return_type;
-                self.expect_token(Token::OpenParenthesis)?;
+                self.expect_token(TokenKind::OpenParenthesis)?;
 
                 let mut arguments = Vec::new();
 
@@ -664,11 +691,11 @@ impl Parser<'_> {
                     arguments.push(argument);
 
                     if index < parameters.len() - 1 {
-                        self.expect_token(Token::Comma)?;
+                        self.expect_token(TokenKind::Comma)?;
                     }
                 }
 
-                self.expect_token(Token::CloseParenthesis)?;
+                self.expect_token(TokenKind::CloseParenthesis)?;
 
                 Ok(Expression {
                     kind: ExpressionKind::FunctionCall(name, arguments),
@@ -689,21 +716,25 @@ impl Parser<'_> {
     }
 
     fn expect_identifier(&mut self) -> Result<Rc<String>, Error> {
-        self.lexer.next()?.map_or_else(
+        let token = self.lexer.next();
+        self.maybe_set_location_from_result(token.as_ref());
+        token?.map_or_else(
             || Err(self.err(ErrorKind::ExpectedIdentifier(None))),
-            |token| match token {
-                Token::Identifier(identifier) => Ok(identifier),
-                _ => Err(self.err(ErrorKind::ExpectedIdentifier(Some(token)))),
+            |token| match token.kind {
+                TokenKind::Identifier(identifier) => Ok(identifier),
+                _ => Err(self.err(ErrorKind::ExpectedIdentifier(Some(token.kind)))),
             },
         )
     }
 
     fn expect_string(&mut self) -> Result<Vec<u8>, Error> {
-        self.lexer.next()?.map_or_else(
+        let token = self.lexer.next();
+        self.maybe_set_location_from_result(token.as_ref());
+        token?.map_or_else(
             || Err(self.err(ErrorKind::ExpectedString(None))),
-            |token| match token {
-                Token::String(identifier) => Ok(identifier),
-                _ => Err(self.err(ErrorKind::ExpectedString(Some(token)))),
+            |token| match token.kind {
+                TokenKind::String(identifier) => Ok(identifier),
+                _ => Err(self.err(ErrorKind::ExpectedString(Some(token.kind)))),
             },
         )
     }
@@ -715,28 +746,33 @@ impl Parser<'_> {
             .map_err(|e| self.err(e))
     }
 
-    fn expect_token(&mut self, expected_token: Token) -> Result<(), Error> {
-        self.lexer.next()?.map_or_else(
-            || Err(self.err(ErrorKind::ExpectedIdentifier(None))),
+    fn expect_token(&mut self, expected_token: TokenKind) -> Result<(), Error> {
+        let token = self.lexer.next();
+        self.maybe_set_location_from_result(token.as_ref());
+        token?.map_or_else(
+            || Err(self.err(ErrorKind::ExpectedToken(expected_token.clone(), None))),
             |token| {
-                if token == expected_token {
+                if token.kind == expected_token {
                     Ok(())
                 } else {
-                    Err(self.err(ErrorKind::ExpectedToken(expected_token, Some(token))))
+                    Err(self.err(ErrorKind::ExpectedToken(
+                        expected_token.clone(),
+                        Some(token.kind),
+                    )))
                 }
             },
         )
     }
 
-    fn peek_token(&mut self, expected_token: Token) -> Result<bool, Error> {
-        Ok(self.lexer.peek()?.is_some_and(|t| *t == expected_token))
+    fn peek_token(&mut self, expected_token: TokenKind) -> Result<bool, Error> {
+        Ok(self.lexer.peek()?.is_some_and(|t| t.kind == expected_token))
     }
 
-    fn peek_token_in(&mut self, expected_tokens: &BTreeSet<Token>) -> Result<bool, Error> {
+    fn peek_token_in(&mut self, expected_tokens: &BTreeSet<TokenKind>) -> Result<bool, Error> {
         Ok(self
             .lexer
             .peek()?
-            .is_some_and(|t| expected_tokens.contains(t)))
+            .is_some_and(|t| expected_tokens.contains(&t.kind)))
     }
 
     fn expect_lvalue(&self, expression: &Expression) -> Result<(), Error> {
@@ -754,9 +790,29 @@ impl Parser<'_> {
         }
     }
 
+    fn set_location(&mut self, token: &Token) {
+        self.line_number = token.line_number;
+        self.column = token.column;
+    }
+
+    fn maybe_set_location(&mut self, token: Option<&Token>) {
+        if let Some(token) = token {
+            self.line_number = token.line_number;
+            self.column = token.column;
+        }
+    }
+
+    fn maybe_set_location_from_result<E>(&mut self, token: Result<&Option<Token>, E>) {
+        if let Ok(Some(token)) = &token {
+            self.line_number = token.line_number;
+            self.column = token.column;
+        }
+    }
+
     fn err(&self, kind: ErrorKind) -> Error {
         Error {
-            line_number: self.lexer.line_number(),
+            line_number: self.line_number,
+            column: self.column,
             kind,
             severity: Severity::Error,
         }
@@ -785,43 +841,43 @@ impl Expression {
     }
 }
 
-fn op(token: &Token) -> Option<Op> {
+fn op(token: &TokenKind) -> Option<Op> {
     binary_op(token)
         .map(Op::Binary)
-        .or_else(|| matches!(token, Token::QuestionMark).then(|| Op::Conditional))
+        .or_else(|| matches!(token, TokenKind::QuestionMark).then(|| Op::Conditional))
 }
 
-fn binary_op(token: &Token) -> Option<BinaryOp> {
+fn binary_op(token: &TokenKind) -> Option<BinaryOp> {
     match token {
-        Token::PlusSign => Some(BinaryOp::Add),
-        Token::Hyphen => Some(BinaryOp::Subtract),
-        Token::Asterisk => Some(BinaryOp::Multiply),
-        Token::Slash => Some(BinaryOp::Divide),
-        Token::Percent => Some(BinaryOp::Remainder),
-        Token::Ampersand => Some(BinaryOp::BitwiseAnd),
-        Token::Bar => Some(BinaryOp::BitwiseOr),
-        Token::Circumflex => Some(BinaryOp::Xor),
-        Token::TwoLessThanOps => Some(BinaryOp::LeftShift),
-        Token::TwoGreaterThanOps => Some(BinaryOp::RightShift),
-        Token::TwoAmpersands => Some(BinaryOp::And),
-        Token::TwoBars => Some(BinaryOp::Or),
-        Token::TwoEqualSigns => Some(BinaryOp::EqualTo),
-        Token::NotEqualSign => Some(BinaryOp::NotEqualTo),
-        Token::LessThanOp => Some(BinaryOp::LessThan),
-        Token::LessThanOrEqualToOp => Some(BinaryOp::LessThanOrEqualTo),
-        Token::GreaterThanOp => Some(BinaryOp::GreaterThan),
-        Token::GreaterThanOrEqualToOp => Some(BinaryOp::GreaterThanOrEqualTo),
-        Token::EqualSign => Some(BinaryOp::Assignment),
-        Token::PlusEqualSign => Some(BinaryOp::AddAssignment),
-        Token::HyphenEqualSign => Some(BinaryOp::SubtractAssignment),
-        Token::AsteriskEqualSign => Some(BinaryOp::MultiplyAssignment),
-        Token::SlashEqualSign => Some(BinaryOp::DivideAssignment),
-        Token::PercentEqualSign => Some(BinaryOp::RemainderAssignment),
-        Token::AmpersandEqualSign => Some(BinaryOp::BitwiseAndAssignment),
-        Token::BarEqualSign => Some(BinaryOp::BitwiseOrAssignment),
-        Token::CircumflexEqualSign => Some(BinaryOp::XorAssignment),
-        Token::TwoLessThanOpsEqualSign => Some(BinaryOp::LeftShiftAssignment),
-        Token::TwoGreaterThanOpsEqualSign => Some(BinaryOp::RightShiftAssignment),
+        TokenKind::PlusSign => Some(BinaryOp::Add),
+        TokenKind::Hyphen => Some(BinaryOp::Subtract),
+        TokenKind::Asterisk => Some(BinaryOp::Multiply),
+        TokenKind::Slash => Some(BinaryOp::Divide),
+        TokenKind::Percent => Some(BinaryOp::Remainder),
+        TokenKind::Ampersand => Some(BinaryOp::BitwiseAnd),
+        TokenKind::Bar => Some(BinaryOp::BitwiseOr),
+        TokenKind::Circumflex => Some(BinaryOp::Xor),
+        TokenKind::TwoLessThanOps => Some(BinaryOp::LeftShift),
+        TokenKind::TwoGreaterThanOps => Some(BinaryOp::RightShift),
+        TokenKind::TwoAmpersands => Some(BinaryOp::And),
+        TokenKind::TwoBars => Some(BinaryOp::Or),
+        TokenKind::TwoEqualSigns => Some(BinaryOp::EqualTo),
+        TokenKind::NotEqualSign => Some(BinaryOp::NotEqualTo),
+        TokenKind::LessThanOp => Some(BinaryOp::LessThan),
+        TokenKind::LessThanOrEqualToOp => Some(BinaryOp::LessThanOrEqualTo),
+        TokenKind::GreaterThanOp => Some(BinaryOp::GreaterThan),
+        TokenKind::GreaterThanOrEqualToOp => Some(BinaryOp::GreaterThanOrEqualTo),
+        TokenKind::EqualSign => Some(BinaryOp::Assignment),
+        TokenKind::PlusEqualSign => Some(BinaryOp::AddAssignment),
+        TokenKind::HyphenEqualSign => Some(BinaryOp::SubtractAssignment),
+        TokenKind::AsteriskEqualSign => Some(BinaryOp::MultiplyAssignment),
+        TokenKind::SlashEqualSign => Some(BinaryOp::DivideAssignment),
+        TokenKind::PercentEqualSign => Some(BinaryOp::RemainderAssignment),
+        TokenKind::AmpersandEqualSign => Some(BinaryOp::BitwiseAndAssignment),
+        TokenKind::BarEqualSign => Some(BinaryOp::BitwiseOrAssignment),
+        TokenKind::CircumflexEqualSign => Some(BinaryOp::XorAssignment),
+        TokenKind::TwoLessThanOpsEqualSign => Some(BinaryOp::LeftShiftAssignment),
+        TokenKind::TwoGreaterThanOpsEqualSign => Some(BinaryOp::RightShiftAssignment),
         _ => None,
     }
 }

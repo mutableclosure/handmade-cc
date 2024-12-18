@@ -1,5 +1,5 @@
 use crate::{
-    token::{Keyword, Token},
+    token::{Keyword, Token, TokenKind},
     Error, ErrorKind, Severity,
 };
 use alloc::{string::String, vec::Vec};
@@ -10,6 +10,7 @@ pub struct Lexer<'a> {
     source: Peekable<Chars<'a>>,
     next: Option<Token>,
     line_number: usize,
+    column: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -18,11 +19,8 @@ impl<'a> Lexer<'a> {
             source: source.chars().peekable(),
             next: None,
             line_number: 1,
+            column: 1,
         }
-    }
-
-    pub fn line_number(&self) -> usize {
-        self.line_number
     }
 
     pub fn peek(&mut self) -> Result<Option<&Token>, Error> {
@@ -45,105 +43,186 @@ impl Lexer<'_> {
     fn advance(&mut self) -> Result<Option<Token>, Error> {
         while let Some(c) = self.source.next() {
             match c {
-                '\n' => self.line_number += 1,
-                _ if c.is_whitespace() => {}
-                _ if c.is_ascii_alphabetic() || c == '_' => return Ok(Some(self.identifier(c))),
+                '\n' => {
+                    self.line_number += 1;
+                    self.column = 1;
+                }
+                _ if c.is_whitespace() => self.column += 1,
+                _ if c.is_ascii_alphabetic() || c == '_' => {
+                    let line_number = self.line_number;
+                    let column = self.column;
+                    let kind = self.identifier(c);
+                    return Ok(Some(Token {
+                        line_number,
+                        column,
+                        kind,
+                    }));
+                }
                 '0' if self.source.next_if_eq(&'x').is_some()
                     || self.source.next_if_eq(&'X').is_some() =>
                 {
-                    return Ok(Some(Token::Constant(self.hex_constant()?)))
+                    let line_number = self.line_number;
+                    let column = self.column;
+                    let kind = TokenKind::Constant(
+                        self.hex_constant()
+                            .map_err(|e| fix_error(e, line_number, column))?,
+                    );
+                    self.column += 2;
+                    return Ok(Some(Token {
+                        line_number,
+                        column,
+                        kind,
+                    }));
                 }
                 '0' if self.source.next_if_eq(&'b').is_some()
                     || self.source.next_if_eq(&'B').is_some() =>
                 {
-                    return Ok(Some(Token::Constant(self.binary_constant()?)))
+                    let line_number = self.line_number;
+                    let column = self.column;
+                    let kind = TokenKind::Constant(
+                        self.binary_constant()
+                            .map_err(|e| fix_error(e, line_number, column))?,
+                    );
+                    self.column += 2;
+                    return Ok(Some(Token {
+                        line_number,
+                        column,
+                        kind,
+                    }));
                 }
-                _ if c.is_ascii_digit() => return Ok(Some(self.decimal_constant(c)?)),
+                _ if c.is_ascii_digit() => {
+                    let line_number = self.line_number;
+                    let column = self.column;
+                    let kind = self
+                        .decimal_constant(c)
+                        .map_err(|e| fix_error(e, line_number, column))?;
+                    return Ok(Some(Token {
+                        line_number,
+                        column,
+                        kind,
+                    }));
+                }
                 '/' if self.source.next_if_eq(&'/').is_some() => self.ignore_line(),
-                '/' if self.source.next_if_eq(&'*').is_some() => self.ignore_multiline_comment(),
-                '(' => return Ok(Some(Token::OpenParenthesis)),
-                ')' => return Ok(Some(Token::CloseParenthesis)),
-                '{' => return Ok(Some(Token::OpenBrace)),
-                '}' => return Ok(Some(Token::CloseBrace)),
-                ';' => return Ok(Some(Token::Semicolon)),
-                '~' => return Ok(Some(Token::Tilde)),
+                '/' if self.source.next_if_eq(&'*').is_some() => {
+                    self.column += 2;
+                    self.ignore_multiline_comment()
+                }
+                '(' => return Ok(Some(self.token(TokenKind::OpenParenthesis))),
+                ')' => return Ok(Some(self.token(TokenKind::CloseParenthesis))),
+                '{' => return Ok(Some(self.token(TokenKind::OpenBrace))),
+                '}' => return Ok(Some(self.token(TokenKind::CloseBrace))),
+                ';' => return Ok(Some(self.token(TokenKind::Semicolon))),
+                '~' => return Ok(Some(self.token(TokenKind::Tilde))),
                 '-' if self.source.next_if_eq(&'-').is_some() => {
-                    return Ok(Some(Token::TwoHyphens))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::TwoHyphens)));
                 }
                 '-' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::HyphenEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::HyphenEqualSign)));
                 }
-                '-' => return Ok(Some(Token::Hyphen)),
+                '-' => return Ok(Some(self.token(TokenKind::Hyphen))),
                 '+' if self.source.next_if_eq(&'+').is_some() => {
-                    return Ok(Some(Token::TwoPlusSigns))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::TwoPlusSigns)));
                 }
                 '+' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::PlusEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::PlusEqualSign)));
                 }
-                '+' => return Ok(Some(Token::PlusSign)),
+                '+' => return Ok(Some(self.token(TokenKind::PlusSign))),
                 '*' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::AsteriskEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::AsteriskEqualSign)));
                 }
-                '*' => return Ok(Some(Token::Asterisk)),
+                '*' => return Ok(Some(self.token(TokenKind::Asterisk))),
                 '/' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::SlashEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::SlashEqualSign)));
                 }
-                '/' => return Ok(Some(Token::Slash)),
+                '/' => return Ok(Some(self.token(TokenKind::Slash))),
                 '%' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::PercentEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::PercentEqualSign)));
                 }
-                '%' => return Ok(Some(Token::Percent)),
+                '%' => return Ok(Some(self.token(TokenKind::Percent))),
                 '^' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::CircumflexEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::CircumflexEqualSign)));
                 }
-                '^' => return Ok(Some(Token::Circumflex)),
+                '^' => return Ok(Some(self.token(TokenKind::Circumflex))),
                 '<' if self.source.next_if_eq(&'<').is_some() => {
+                    self.column += 1;
                     return Ok(Some(if self.source.next_if_eq(&'=').is_some() {
-                        Token::TwoLessThanOpsEqualSign
+                        self.column += 1;
+                        self.token(TokenKind::TwoLessThanOpsEqualSign)
                     } else {
-                        Token::TwoLessThanOps
+                        self.token(TokenKind::TwoLessThanOps)
                     }));
                 }
                 '>' if self.source.next_if_eq(&'>').is_some() => {
+                    self.column += 1;
                     return Ok(Some(if self.source.next_if_eq(&'=').is_some() {
-                        Token::TwoGreaterThanOpsEqualSign
+                        self.column += 1;
+                        self.token(TokenKind::TwoGreaterThanOpsEqualSign)
                     } else {
-                        Token::TwoGreaterThanOps
+                        self.token(TokenKind::TwoGreaterThanOps)
                     }));
                 }
                 '&' if self.source.next_if_eq(&'&').is_some() => {
-                    return Ok(Some(Token::TwoAmpersands))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::TwoAmpersands)));
                 }
                 '&' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::AmpersandEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::AmpersandEqualSign)));
                 }
-                '&' => return Ok(Some(Token::Ampersand)),
-                '|' if self.source.next_if_eq(&'|').is_some() => return Ok(Some(Token::TwoBars)),
+                '&' => return Ok(Some(self.token(TokenKind::Ampersand))),
+                '|' if self.source.next_if_eq(&'|').is_some() => {
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::TwoBars)));
+                }
                 '|' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::BarEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::BarEqualSign)));
                 }
-                '|' => return Ok(Some(Token::Bar)),
+                '|' => return Ok(Some(self.token(TokenKind::Bar))),
                 '=' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::TwoEqualSigns))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::TwoEqualSigns)));
                 }
-                '=' => return Ok(Some(Token::EqualSign)),
+                '=' => return Ok(Some(self.token(TokenKind::EqualSign))),
                 '!' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::NotEqualSign))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::NotEqualSign)));
                 }
-                '!' => return Ok(Some(Token::ExclamationPoint)),
+                '!' => return Ok(Some(self.token(TokenKind::ExclamationPoint))),
                 '<' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::LessThanOrEqualToOp))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::LessThanOrEqualToOp)));
                 }
-                '<' => return Ok(Some(Token::LessThanOp)),
+                '<' => return Ok(Some(self.token(TokenKind::LessThanOp))),
                 '>' if self.source.next_if_eq(&'=').is_some() => {
-                    return Ok(Some(Token::GreaterThanOrEqualToOp))
+                    self.column += 1;
+                    return Ok(Some(self.token(TokenKind::GreaterThanOrEqualToOp)));
                 }
-                '>' => return Ok(Some(Token::GreaterThanOp)),
-                '?' => return Ok(Some(Token::QuestionMark)),
-                ':' => return Ok(Some(Token::Colon)),
-                ',' => return Ok(Some(Token::Comma)),
-                '#' => return Ok(Some(Token::NumberSign)),
-                '\"' => return Ok(Some(self.string()?)),
+                '>' => return Ok(Some(self.token(TokenKind::GreaterThanOp))),
+                '?' => return Ok(Some(self.token(TokenKind::QuestionMark))),
+                ':' => return Ok(Some(self.token(TokenKind::Colon))),
+                ',' => return Ok(Some(self.token(TokenKind::Comma))),
+                '#' => return Ok(Some(self.token(TokenKind::NumberSign))),
+                '\"' => {
+                    let line_number = self.line_number;
+                    let column = self.column;
+                    let kind = self
+                        .string()
+                        .map_err(|e| fix_error(e, line_number, column))?;
+                    return Ok(Some(Token {
+                        line_number,
+                        column,
+                        kind,
+                    }));
+                }
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }
@@ -155,6 +234,7 @@ impl Lexer<'_> {
         for c in self.source.by_ref() {
             if c == '\n' {
                 self.line_number += 1;
+                self.column = 1;
                 break;
             }
         }
@@ -163,39 +243,47 @@ impl Lexer<'_> {
     fn ignore_multiline_comment(&mut self) {
         while let Some(c) = self.source.next() {
             match c {
-                '*' if self.source.next_if_eq(&'/').is_some() => break,
-                '\n' => self.line_number += 1,
-                _ => {}
+                '*' if self.source.next_if_eq(&'/').is_some() => {
+                    self.column += 2;
+                    break;
+                }
+                '\n' => {
+                    self.line_number += 1;
+                    self.column = 1;
+                }
+                _ => self.column += 1,
             }
         }
     }
 
-    fn identifier(&mut self, first: char) -> Token {
+    fn identifier(&mut self, first: char) -> TokenKind {
         let mut identifier = vec![first];
+        self.column += 1;
 
         while let Some(c) = self.source.next_if(|&c| c.is_alphanumeric() || c == '_') {
             identifier.push(c);
+            self.column += 1;
         }
 
         let identifier = identifier.into_iter().collect::<String>();
 
         match identifier.as_str() {
-            "int" => Token::Keyword(Keyword::Int),
-            "void" => Token::Keyword(Keyword::Void),
-            "return" => Token::Keyword(Keyword::Return),
-            "if" => Token::Keyword(Keyword::If),
-            "else" => Token::Keyword(Keyword::Else),
-            "do" => Token::Keyword(Keyword::Do),
-            "while" => Token::Keyword(Keyword::While),
-            "for" => Token::Keyword(Keyword::For),
-            "break" => Token::Keyword(Keyword::Break),
-            "continue" => Token::Keyword(Keyword::Continue),
-            "extern" => Token::Keyword(Keyword::Extern),
-            "const" => Token::Keyword(Keyword::Const),
-            "switch" => Token::Keyword(Keyword::Switch),
-            "case" => Token::Keyword(Keyword::Case),
-            "default" => Token::Keyword(Keyword::Default),
-            _ => Token::Identifier(identifier.into()),
+            "int" => TokenKind::Keyword(Keyword::Int),
+            "void" => TokenKind::Keyword(Keyword::Void),
+            "return" => TokenKind::Keyword(Keyword::Return),
+            "if" => TokenKind::Keyword(Keyword::If),
+            "else" => TokenKind::Keyword(Keyword::Else),
+            "do" => TokenKind::Keyword(Keyword::Do),
+            "while" => TokenKind::Keyword(Keyword::While),
+            "for" => TokenKind::Keyword(Keyword::For),
+            "break" => TokenKind::Keyword(Keyword::Break),
+            "continue" => TokenKind::Keyword(Keyword::Continue),
+            "extern" => TokenKind::Keyword(Keyword::Extern),
+            "const" => TokenKind::Keyword(Keyword::Const),
+            "switch" => TokenKind::Keyword(Keyword::Switch),
+            "case" => TokenKind::Keyword(Keyword::Case),
+            "default" => TokenKind::Keyword(Keyword::Default),
+            _ => TokenKind::Identifier(identifier.into()),
         }
     }
 
@@ -207,11 +295,13 @@ impl Lexer<'_> {
         self.integer_constant(2, |c| c == '0' || c == '1')
     }
 
-    fn decimal_constant(&mut self, first: char) -> Result<Token, Error> {
+    fn decimal_constant(&mut self, first: char) -> Result<TokenKind, Error> {
         let mut token = vec![first];
+        self.column += 1;
 
         while let Some(c) = self.source.next_if(|c| c.is_ascii_digit()) {
             token.push(c);
+            self.column += 1;
         }
 
         token
@@ -219,7 +309,7 @@ impl Lexer<'_> {
             .collect::<String>()
             .parse::<i32>()
             .map_err(|_| self.err(ErrorKind::ConstantTooLarge))
-            .map(Token::Constant)
+            .map(TokenKind::Constant)
     }
 
     fn integer_constant<F: Fn(char) -> bool>(
@@ -231,6 +321,7 @@ impl Lexer<'_> {
 
         while let Some(c) = self.source.next_if(|&c| included(c)) {
             string.push(c);
+            self.column += 1;
         }
 
         if string.is_empty() {
@@ -243,10 +334,13 @@ impl Lexer<'_> {
         Ok(value)
     }
 
-    fn string(&mut self) -> Result<Token, Error> {
+    fn string(&mut self) -> Result<TokenKind, Error> {
         let mut data = Vec::new();
+        self.column += 1;
 
         while let Some(c) = self.source.next_if(|&c| c != '"') {
+            self.column += 1;
+
             match c {
                 '\\' => match self.source.next() {
                     Some('t') => data.push(b'\t'),
@@ -269,17 +363,35 @@ impl Lexer<'_> {
         }
 
         if matches!(self.source.next(), Some('"')) {
-            Ok(Token::String(data))
+            self.column += 1;
+            Ok(TokenKind::String(data))
         } else {
             Err(self.err(ErrorKind::UnterminatedString))
+        }
+    }
+
+    fn token(&mut self, kind: TokenKind) -> Token {
+        let column = self.column;
+        self.column += 1;
+        Token {
+            line_number: self.line_number,
+            column,
+            kind,
         }
     }
 
     fn err(&self, kind: ErrorKind) -> Error {
         Error {
             line_number: self.line_number,
+            column: self.column,
             kind,
             severity: Severity::Error,
         }
     }
+}
+
+fn fix_error(mut error: Error, line_number: usize, column: usize) -> Error {
+    error.line_number = line_number;
+    error.column = column;
+    error
 }

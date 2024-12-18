@@ -1,4 +1,4 @@
-use crate::token::Token;
+use crate::token::TokenKind;
 use alloc::{rc::Rc, string::String};
 use core::fmt::{self, Display, Formatter, Result};
 
@@ -7,11 +7,11 @@ pub enum Kind {
     InvalidToken(char),
     InvalidConstant,
     ConstantTooLarge,
-    UnknownType(Token),
+    UnknownType(TokenKind),
     ExpectedType,
-    ExpectedIdentifier(Option<Token>),
-    ExpectedToken(Token, Option<Token>),
-    ExpectedExpression(Option<Token>),
+    ExpectedIdentifier(Option<TokenKind>),
+    ExpectedToken(TokenKind, Option<TokenKind>),
+    ExpectedExpression(Option<TokenKind>),
     Redefinition(Rc<String>),
     Undeclared(Rc<String>),
     ConflictingTypes(Rc<String>),
@@ -27,7 +27,7 @@ pub enum Kind {
     UnterminatedString,
     InvalidCharacter(char),
     InvalidEscapeSequence,
-    ExpectedString(Option<Token>),
+    ExpectedString(Option<TokenKind>),
     AssemblerError(String),
 }
 
@@ -40,6 +40,7 @@ pub enum Severity {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Error {
     pub(crate) line_number: usize,
+    pub(crate) column: usize,
     pub(crate) kind: Kind,
     pub(crate) severity: Severity,
 }
@@ -47,6 +48,10 @@ pub struct Error {
 impl Error {
     pub fn line_number(&self) -> usize {
         self.line_number
+    }
+
+    pub fn column(&self) -> usize {
+        self.column
     }
 
     pub fn kind(&self) -> &Kind {
@@ -121,7 +126,7 @@ impl Display for Severity {
     }
 }
 
-fn write_found(f: &mut Formatter<'_>, found: &Option<Token>) -> fmt::Result {
+fn write_found(f: &mut Formatter<'_>, found: &Option<TokenKind>) -> fmt::Result {
     found
         .as_ref()
         .map(|found| write!(f, ", found: '{found}'"))

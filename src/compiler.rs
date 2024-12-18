@@ -19,6 +19,7 @@ impl Compiler {
 
         wat::parse_str(source).map_err(|e| Error {
             line_number: 0,
+            column: 0,
             kind: ErrorKind::AssemblerError(e.to_string()),
             severity: Severity::Error,
         })
