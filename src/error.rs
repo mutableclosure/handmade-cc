@@ -65,10 +65,6 @@ pub enum Kind {
 /// Severity level of an error.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum Severity {
-    /// A warning that does not halt compilation.
-    ///
-    /// Note: currently, no warnings are emitted.
-    Warning,
     /// An error that halts compilation.
     Error,
 }
@@ -165,7 +161,6 @@ impl Display for Kind {
 impl Display for Severity {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Severity::Warning => write!(f, "warning"),
             Severity::Error => write!(f, "error"),
         }
     }
