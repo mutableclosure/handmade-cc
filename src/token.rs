@@ -64,6 +64,11 @@ pub enum TokenKind {
 #[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
 pub enum Keyword {
     Int,
+    Char,
+    Float,
+    Double,
+    Long,
+    Short,
     Void,
     Return,
     If,
@@ -78,6 +83,10 @@ pub enum Keyword {
     Switch,
     Case,
     Default,
+    Struct,
+    Enum,
+    Typedef,
+    Goto,
 }
 
 impl Display for TokenKind {
@@ -139,6 +148,11 @@ impl Display for Keyword {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Keyword::Int => write!(f, "int"),
+            Keyword::Char => write!(f, "char"),
+            Keyword::Float => write!(f, "float"),
+            Keyword::Double => write!(f, "double"),
+            Keyword::Long => write!(f, "long"),
+            Keyword::Short => write!(f, "short"),
             Keyword::Void => write!(f, "void"),
             Keyword::Return => write!(f, "return"),
             Keyword::If => write!(f, "if"),
@@ -153,6 +167,10 @@ impl Display for Keyword {
             Keyword::Switch => write!(f, "switch"),
             Keyword::Case => write!(f, "case"),
             Keyword::Default => write!(f, "default"),
+            Keyword::Struct => write!(f, "struct"),
+            Keyword::Enum => write!(f, "enum"),
+            Keyword::Typedef => write!(f, "typedef"),
+            Keyword::Goto => write!(f, "goto"),
         }
     }
 }

@@ -98,6 +98,18 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TokenKind::NumberSign => data.push(self.directive()?),
+                TokenKind::Keyword(Keyword::Char)
+                | TokenKind::Keyword(Keyword::Float)
+                | TokenKind::Keyword(Keyword::Double)
+                | TokenKind::Keyword(Keyword::Long)
+                | TokenKind::Keyword(Keyword::Short)
+                | TokenKind::Keyword(Keyword::Struct)
+                | TokenKind::Keyword(Keyword::Enum) => {
+                    return Err(self.err(ErrorKind::UnsupportedType))
+                }
+                TokenKind::Keyword(Keyword::Typedef) => {
+                    return Err(self.err(ErrorKind::UnsupportedFeature(token.kind)))
+                }
                 _ => return Err(self.err(ErrorKind::UnknownType(token.kind))),
             }
         }
@@ -163,6 +175,13 @@ impl Parser<'_> {
                 let name = self.expect_identifier()?;
                 self.function(name, Type::Void, DeclarationScope::Extern)
             }
+            Some(TokenKind::Keyword(Keyword::Char))
+            | Some(TokenKind::Keyword(Keyword::Float))
+            | Some(TokenKind::Keyword(Keyword::Double))
+            | Some(TokenKind::Keyword(Keyword::Long))
+            | Some(TokenKind::Keyword(Keyword::Short))
+            | Some(TokenKind::Keyword(Keyword::Struct))
+            | Some(TokenKind::Keyword(Keyword::Enum)) => Err(self.err(ErrorKind::UnsupportedType)),
             _ => Err(self.err(
                 token
                     .map(ErrorKind::UnknownType)
@@ -589,7 +608,8 @@ impl Parser<'_> {
     fn factor(&mut self) -> Result<Expression, Error> {
         let token = self.lexer.next()?;
         self.maybe_set_location(token.as_ref());
-        match token.map(|t| t.kind) {
+        let kind = token.map(|t| t.kind);
+        match kind {
             Some(TokenKind::Constant(value)) => {
                 Ok(Expression::int(ExpressionKind::Constant(value)))
             }
@@ -662,6 +682,17 @@ impl Parser<'_> {
                     }
                 }
                 Ok(expression)
+            }
+            Some(TokenKind::Keyword(Keyword::Char))
+            | Some(TokenKind::Keyword(Keyword::Float))
+            | Some(TokenKind::Keyword(Keyword::Double))
+            | Some(TokenKind::Keyword(Keyword::Long))
+            | Some(TokenKind::Keyword(Keyword::Short))
+            | Some(TokenKind::Keyword(Keyword::Struct))
+            | Some(TokenKind::Keyword(Keyword::Enum))
+            | Some(TokenKind::Keyword(Keyword::Typedef))
+            | Some(TokenKind::Keyword(Keyword::Goto)) => {
+                Err(self.err(ErrorKind::UnsupportedFeature(kind.unwrap())))
             }
             token => Err(self.err(ErrorKind::ExpectedExpression(token))),
         }

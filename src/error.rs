@@ -56,6 +56,12 @@ pub enum Kind {
     InvalidEscapeSequence,
     /// Expected a string literal but the given token was found instead (or `None` on EOF).
     ExpectedString(Option<TokenKind>),
+    /// Attempted to use type that may be valid in C but it's currently unsupported.
+    UnsupportedType,
+    /// Attempted to use a feature that may be valid in C but it's currently unsupported.
+    UnsupportedFeature(TokenKind),
+    /// Attempted to use array syntax but arrays are currently unsupported.
+    ArraysUnsupported,
     /// Error emitted by the [`wat`](https://crates.io/crates/wat) crate when compiling the WAT source to binary.
     ///
     /// Note: Likely indicates a bug in this compiler!
@@ -153,6 +159,9 @@ impl Display for Kind {
                 write!(f, "Expected string")?;
                 write_found(f, found)
             }
+            Kind::UnsupportedType => write!(f, "Only 'int' and 'void' types are supported"),
+            Kind::UnsupportedFeature(token) => write!(f, "'{token}' is unsupported"),
+            Kind::ArraysUnsupported => write!(f, "Arrays are unsupported"),
             Kind::AssemblerError(error) => write!(f, "{error}"),
         }
     }

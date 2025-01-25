@@ -226,6 +226,7 @@ impl Lexer<'_> {
                         kind,
                     }));
                 }
+                '[' | ']' => return Err(self.err(ErrorKind::ArraysUnsupported)),
                 _ => return Err(self.err(ErrorKind::InvalidToken(c))),
             }
         }
@@ -272,6 +273,11 @@ impl Lexer<'_> {
 
         match identifier.as_str() {
             "int" => TokenKind::Keyword(Keyword::Int),
+            "char" => TokenKind::Keyword(Keyword::Char),
+            "float" => TokenKind::Keyword(Keyword::Float),
+            "double" => TokenKind::Keyword(Keyword::Double),
+            "long" => TokenKind::Keyword(Keyword::Long),
+            "short" => TokenKind::Keyword(Keyword::Short),
             "void" => TokenKind::Keyword(Keyword::Void),
             "return" => TokenKind::Keyword(Keyword::Return),
             "if" => TokenKind::Keyword(Keyword::If),
@@ -286,6 +292,10 @@ impl Lexer<'_> {
             "switch" => TokenKind::Keyword(Keyword::Switch),
             "case" => TokenKind::Keyword(Keyword::Case),
             "default" => TokenKind::Keyword(Keyword::Default),
+            "struct" => TokenKind::Keyword(Keyword::Struct),
+            "enum" => TokenKind::Keyword(Keyword::Enum),
+            "typedef" => TokenKind::Keyword(Keyword::Typedef),
+            "goto" => TokenKind::Keyword(Keyword::Goto),
             _ => TokenKind::Identifier(identifier.into()),
         }
     }
