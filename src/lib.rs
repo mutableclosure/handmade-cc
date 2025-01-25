@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #![no_std]
+#![warn(missing_docs)]
+#![doc = include_str!("../README.md")]
 
 #[macro_use]
 extern crate alloc;
