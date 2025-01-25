@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Ludovico Rossi
+// SPDX-License-Identifier: MPL-2.0
+
 use serde_json::Value;
 use std::env;
 use std::fs::{self, File};

@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Ludovico Rossi
+// SPDX-License-Identifier: MPL-2.0
+
 use crate::ir::{Datum, ExternalFunction, Function, Global, Instruction, Module, Type};
 use alloc::string::{String, ToString};
 use core::{fmt::Write, mem};

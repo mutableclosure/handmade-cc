@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Ludovico Rossi
+// SPDX-License-Identifier: MPL-2.0
+
 use crate::{emitter::Emitter, parser::Parser, wat::Wat, Error, ErrorKind, Severity};
 use alloc::{string::String, vec::Vec};
 

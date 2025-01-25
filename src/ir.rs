@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Ludovico Rossi
+// SPDX-License-Identifier: MPL-2.0
+
 use alloc::{rc::Rc, string::String, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

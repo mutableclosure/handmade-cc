@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Ludovico Rossi
+// SPDX-License-Identifier: MPL-2.0
+
 use handmade_cc::Compiler;
 use std::time::Instant;
 use wasmi::{AsContext, Caller, Engine, Func, Linker, Memory, MemoryType, Module, Store};

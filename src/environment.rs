@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Ludovico Rossi
+// SPDX-License-Identifier: MPL-2.0
+
 use crate::{
     ast::{ConstQualifier, FunctionParameter, Lvalue, Type},
     ErrorKind,
