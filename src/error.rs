@@ -119,49 +119,49 @@ impl Display for Error {
 impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Kind::InvalidToken(found) => write!(f, "Invalid token: '{found}'"),
-            Kind::InvalidConstant => write!(f, "Invalid integer constant"),
-            Kind::ConstantTooLarge => write!(f, "Integer literal too large"),
-            Kind::UnknownType(found) => write!(f, "Unknown type: '{found}'"),
-            Kind::ExpectedType => write!(f, "Expected type"),
+            Kind::InvalidToken(found) => write!(f, "invalid token: '{found}'"),
+            Kind::InvalidConstant => write!(f, "invalid integer constant"),
+            Kind::ConstantTooLarge => write!(f, "integer literal too large"),
+            Kind::UnknownType(found) => write!(f, "unknown type: '{found}'"),
+            Kind::ExpectedType => write!(f, "expected type"),
             Kind::ExpectedIdentifier(found) => {
-                write!(f, "Expected identifier")?;
+                write!(f, "expected identifier")?;
                 write_found(f, found)
             }
             Kind::ExpectedToken(token, found) => {
-                write!(f, "Expected '{token}'")?;
+                write!(f, "expected '{token}'")?;
                 write_found(f, found)
             }
             Kind::ExpectedExpression(found) => {
-                write!(f, "Expected expression")?;
+                write!(f, "expected expression")?;
                 write_found(f, found)
             }
-            Kind::Redefinition(identifier) => write!(f, "Redefinition of '{identifier}'"),
+            Kind::Redefinition(identifier) => write!(f, "redefinition of '{identifier}'"),
             Kind::Undeclared(identifier) => write!(f, "'{identifier}' undeclared"),
-            Kind::ConflictingTypes(identifier) => write!(f, "Conflicting types for '{identifier}'"),
-            Kind::InvalidLvalue => write!(f, "'Invalid lvalue"),
+            Kind::ConflictingTypes(identifier) => write!(f, "conflicting types for '{identifier}'"),
+            Kind::InvalidLvalue => write!(f, "'invalid lvalue"),
             Kind::BreakOutsideLoopOrSwitch => {
                 write!(f, "'break' statement not within a loop or switch")
             }
             Kind::ContinueOutsideLoop => write!(f, "'continue' statement not within a loop"),
-            Kind::UndefinedFunction(name) => write!(f, "Undefined reference to '{name}'"),
-            Kind::NonConstantExpression => write!(f, "Expression is not constant"),
-            Kind::NonIntegerExpression => write!(f, "Expression has non-integer type"),
+            Kind::UndefinedFunction(name) => write!(f, "undefined reference to '{name}'"),
+            Kind::NonConstantExpression => write!(f, "expression is not constant"),
+            Kind::NonIntegerExpression => write!(f, "expression has non-integer type"),
             Kind::CannotAssignToConst(name) => {
-                write!(f, "Cannot assign to const-qualified variable '{name}'")
+                write!(f, "cannot assign to const-qualified variable '{name}'")
             }
-            Kind::DuplicateCase => write!(f, "Duplicate case in switch statement"),
-            Kind::InvalidDirective(name) => write!(f, "Invalid directive: '{name}'"),
-            Kind::UnterminatedString => write!(f, "Unterminated string"),
-            Kind::InvalidCharacter(c) => write!(f, "Invalid character: '{c}'"),
-            Kind::InvalidEscapeSequence => write!(f, "Invalid escape sequence"),
+            Kind::DuplicateCase => write!(f, "duplicate case in switch statement"),
+            Kind::InvalidDirective(name) => write!(f, "invalid directive: '{name}'"),
+            Kind::UnterminatedString => write!(f, "unterminated string"),
+            Kind::InvalidCharacter(c) => write!(f, "invalid character: '{c}'"),
+            Kind::InvalidEscapeSequence => write!(f, "invalid escape sequence"),
             Kind::ExpectedString(found) => {
-                write!(f, "Expected string")?;
+                write!(f, "expected string")?;
                 write_found(f, found)
             }
-            Kind::UnsupportedType => write!(f, "Only 'int' and 'void' types are supported"),
+            Kind::UnsupportedType => write!(f, "only 'int' and 'void' types are supported"),
             Kind::UnsupportedFeature(token) => write!(f, "'{token}' is unsupported"),
-            Kind::ArraysUnsupported => write!(f, "Arrays are unsupported"),
+            Kind::ArraysUnsupported => write!(f, "arrays are unsupported"),
             Kind::AssemblerError(error) => write!(f, "{error}"),
         }
     }
