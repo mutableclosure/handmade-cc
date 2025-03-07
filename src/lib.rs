@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #![no_std]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
